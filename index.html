@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>じエる - SVG Editor</title>
+
+<style>
+/* ===========================
+   基本レイアウト
+=========================== */
+body {
+    margin: 0;
+    font-family: sans-serif;
+    overflow: hidden;
+    background: #f5f5f5;
+}
+
+.topbar {
+    height: 50px;
+    background: #1e88e5;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 15px;
+}
+
+.topnav button {
+    margin-left: 10px;
+    padding: 6px 12px;
+    border: none;
+    background: #fff;
+    color: #1e88e5;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.sidepanel {
+    position: fixed;
+    top: 50px;
+    width: 220px;
+    height: calc(100vh - 50px);
+    background: #fff;
+    border-right: 1px solid #ccc;
+    padding: 10px;
+    overflow-y: auto;
+    transition: transform 0.3s;
+    z-index: 10;
+}
+
+#leftPanel { left: 0; transform: translateX(-100%); }
+#rightPanel { right: 0; transform: translateX(100%); }
+
+.sidepanel.show { transform: translateX(0); }
+
+.panelToggles {
+    position: fixed;
+    top: 55px;
+    left: 10px;
+    z-index: 20;
+}
+
+.panelToggles button {
+    margin-right: 10px;
+    padding: 6px 12px;
+}
+
+/* ===========================
+   キャンバス
+=========================== */
+#canvasWrapper {
+    width: 100vw;
+    height: calc(100vh - 50px);
+    background: #eee;
+    overflow: hidden;
+    position: relative;
+}
+
+#editorCanvas {
+    width: 100%;
+    height: 100%;
+    cursor: grab;
+}
+
+/* ===========================
+   選択ハンドル
+=========================== */
+.handle {
+    fill: #fff;
+    stroke: #1e88e5;
+    stroke-width: 2;
+    cursor: pointer;
+}
+
+.rotate-handle {
+    fill: #1e88e5;
+    cursor: pointer;
+}
+
+/* ===========================
+   フローティングメニュー
+=========================== */
+#floatMenu {
+    position: fixed;
+    background: #fff;
+    border: 1px solid #ccc;
+    padding: 8px;
+    border-radius: 6px;
+    z-index: 30;
+}
+
+.hidden { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ===========================
+     ヘッダー
+=========================== -->
+<header class="topbar">
+    <div class="logo">じエる</div>
+    <nav class="topnav">
+        <button id="btnHome">ホーム</button>
+        <button id="btnNew">新作</button>
+        <button id="btnDownload">DL</button>
+        <button id="btnFeedback">フィードバック</button>
+    </nav>
+</header>
+
+<!-- ===========================
+     左パネル
+=========================== -->
+<aside id="leftPanel" class="sidepanel">
+    <h3>ツール</h3>
+    <button class="tool" data-add="rect">四角形</button>
+    <button class="tool" data-add="triangle">三角形</button>
+    <button class="tool" data-add="polygon">多角形</button>
+    <button class="tool" data-add="text">テキスト</button>
+
+    <h4>SVGアップロード</h4>
+    <input type="file" id="svgUpload" accept=".svg">
+</aside>
+
+<!-- ===========================
+     右パネル
+=========================== -->
+<aside id="rightPanel" class="sidepanel">
+    <h3>プロパティ</h3>
+
+    <label>ネーム</label>
+    <input type="text" id="elemName">
+
+    <label>サイズ</label>
+    <div id="elemSize">幅 0px × 高さ 0px</div>
+
+    <label>RGBA</label>
+    <input type="color" id="colorPicker">
+    <input type="range" id="alphaRange" min="0" max="1" step="0.01">
+
+    <h4>レイヤー</h4>
+    <button data-layer="front">前面</button>
+    <button data-layer="back">背面</button>
+    <button data-layer="top">最前面</button>
+    <button data-layer="bottom">最背面</button>
+</aside>
+
+<!-- ===========================
+     パネル開閉ボタン
+=========================== -->
+<div class="panelToggles">
+    <button id="toggleLeft">◀ ツール</button>
+    <button id="toggleRight">プロパティ ▶</button>
+</div>
+
+<!-- ===========================
+     キャンバス
+=========================== -->
+<main id="canvasWrapper">
+    <svg id="editorCanvas" viewBox="0 0 1000 1000">
+        <!-- 図形がここに追加される -->
+    </svg>
+</main>
+
+<!-- ===========================
+     フローティングメニュー
+=========================== -->
+<div id="floatMenu" class="hidden">
+    <button data-float="color">色変更</button>
+    <button data-float="front">前面</button>
+    <button data-float="back">背面</button>
+    <button data-float="delete">削除</button>
+</div>
+
+<script>
+/* ============================================================
+   JavaScript：図形追加・ドラッグ移動・リサイズ・回転・ズーム
+============================================================ */
+const svg = document.getElementById("editorCanvas");
+let selected = null;
+let handles = [];
+let rotateHandle = null;
+let isDragging = false;
+let dragStart = null;
+let viewBox = { x:0, y:0, w:1000, h:1000 };
+
+/* ===========================
+   図形追加
+=========================== */
+document.querySelectorAll(".tool").forEach(btn=>{
+    btn.onclick = ()=>{
+        const type = btn.dataset.add;
+        let elem;
+
+        if(type==="rect"){
+            elem = document.createElementNS("http://www.w3.org/2000/svg","rect");
+            elem.setAttribute("x",100);
+            elem.setAttribute("y",100);
+            elem.setAttribute("width",150);
+            elem.setAttribute("height",100);
+            elem.setAttribute("fill","#2196f3");
+        }
+        if(type==="triangle"){
+            elem = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+            elem.setAttribute("points","150,50 250,200 50,200");
+            elem.setAttribute("fill","#4caf50");
+        }
+        if(type==="polygon"){
+            elem = document.createElementNS("http://www.w3.org/2000/svg","polygon");
+            elem.setAttribute("points","100,100 200,100 250,200 150,250 50,200");
+            elem.setAttribute("fill","#ff9800");
+        }
+        if(type==="text"){
+            elem = document.createElementNS("http://www.w3.org/2000/svg","text");
+            elem.setAttribute("x",150);
+            elem.setAttribute("y",150);
+            elem.textContent = "テキスト";
+            elem.setAttribute("font-size","32");
+            elem.setAttribute("fill","#000");
+        }
+
+        elem.classList.add("shape");
+        svg.appendChild(elem);
+        selectElement(elem);
+    };
+});
+
+/* ===========================
+   要素選択
+=========================== */
+svg.addEventListener("mousedown", e=>{
+    if(e.target.classList.contains("shape")){
+        selectElement(e.target);
+        isDragging = true;
+        dragStart = { x:e.clientX, y:e.clientY };
+    }
+});
+
+/* ===========================
+   ドラッグ移動
+=========================== */
+window.addEventListener("mousemove", e=>{
+    if(isDragging && selected){
+        const dx = (e.clientX - dragStart.x) * (viewBox.w / svg.clientWidth);
+        const dy = (e.clientY - dragStart.y) * (viewBox.h / svg.clientHeight);
+
+        if(selected.tagName==="rect"){
+            selected.setAttribute("x", Number(selected.getAttribute("x")) + dx);
+            selected.setAttribute("y", Number(selected.getAttribute("y")) + dy);
+        }
+        if(selected.tagName==="text"){
+            selected.setAttribute("x", Number(selected.getAttribute("x")) + dx);
+            selected.setAttribute("y", Number(selected.getAttribute("y")) + dy);
+        }
+        if(selected.tagName==="polygon"){
+            const pts = selected.getAttribute("points").split(" ").map(p=>{
+                let [px,py] = p.split(",");
+                return (Number(px)+dx)+","+(Number(py)+dy);
+            });
+            selected.setAttribute("points", pts.join(" "));
+        }
+
+        dragStart = { x:e.clientX, y:e.clientY };
+        updateHandles();
+    }
+});
+
+window.addEventListener("mouseup", ()=>{ isDragging=false; });
+
+/* ===========================
+   ズーム
+=========================== */
+svg.addEventListener("wheel", e=>{
+    e.preventDefault();
+    const scale = e.deltaY > 0 ? 1.1 : 0.9;
+    viewBox.w *= scale;
+    viewBox.h *= scale;
+    svg.setAttribute("viewBox", `${viewBox.x} ${viewBox.y} ${viewBox.w} ${viewBox.h}`);
+});
+
+/* ===========================
+   要素選択処理
+=========================== */
+function selectElement(elem){
+    selected = elem;
+    showFloatMenu();
+    createHandles();
+}
+
+/* ===========================
+   ハンドル生成
+=========================== */
+function createHandles(){
+    removeHandles();
+
+    const bbox = selected.getBBox();
+    const points = [
+        [bbox.x, bbox.y],
+        [bbox.x + bbox.width, bbox.y],
+        [bbox.x, bbox.y + bbox.height],
+        [bbox.x + bbox.width, bbox.y + bbox.height]
+    ];
+
+    points.forEach(p=>{
+        const h = document.createElementNS("http://www.w3.org/2000/svg","circle");
+        h.setAttribute("cx", p[0]);
+        h.setAttribute("cy", p[1]);
+        h.setAttribute("r", 10);
+        h.classList.add("handle");
+        svg.appendChild(h);
+        handles.push(h);
+    });
+
+    rotateHandle = document.createElementNS("http://www.w3.org/2000/svg","circle");
+    rotateHandle.setAttribute("cx", bbox.x + bbox.width/2);
+    rotateHandle.setAttribute("cy", bbox.y - 40);
+    rotateHandle.setAttribute("r", 12);
+    rotateHandle.classList.add("rotate-handle");
+    svg.appendChild(rotateHandle);
+}
+
+/* ===========================
+   ハンドル削除
+=========================== */
+function removeHandles(){
+    handles.forEach(h=>h.remove());
+    handles = [];
+    if(rotateHandle) rotateHandle.remove();
+}
+
+/* ===========================
+   ハンドル位置更新
+=========================== */
+function updateHandles(){
+    if(!selected) return;
+    createHandles();
+}
+
+/* ===========================
+   フローティングメニュー
+=========================== */
+function showFloatMenu(){
+    const menu = document.getElementById("floatMenu");
+    menu.classList.remove("hidden");
+    menu.style.left = "20px";
+    menu.style.top = "80px";
+}
+
+/* ===========================
+   パネル開閉
+=========================== */
+document.getElementById("toggleLeft").onclick = ()=>{
+    document.getElementById("leftPanel").classList.toggle("show");
+};
+document.getElementById("toggleRight").onclick = ()=>{
+    document.getElementById("rightPanel").classList.toggle("show");
+};
+
+/* ===========================
+   SVGアップロード
+=========================== */
+document.getElementById("svgUpload").onchange = e=>{
+    const file = e.target.files[0];
+    if(!file) return;
+
+    const reader = new FileReader();
+    reader.onload = ()=>{
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(reader.result, "image/svg+xml");
+        const imported = doc.documentElement;
+        imported.classList.add("shape");
+        svg.appendChild(imported);
+        selectElement(imported);
+    };
+    reader.readAsText(file);
+};
+</script>
+
+</body>
+</html>
