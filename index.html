@@ -2,167 +2,882 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>UI's Editor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UI's エディタ</title>
 <style>
-body {
-    margin: 0;
-    font-family: sans-serif;
-    background: #fff;
-}
-
-/* 上部バー */
-.header {
-    background: #659aff;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    padding-left: 20px;
-    gap: 20px;
-}
-.header button {
-    background: #fff;
-    border: none;
-    padding: 5px 10px;
-    font-size: 14px;
-}
-
-/* キャンバス */
-.canvas {
-    width: 100%;
-    height: 300px;
-    position: relative;
-    background: #f0f0f0;
-}
-
-/* 選択枠 */
-.selector {
-    position: absolute;
-    border: 2px solid #0021ff;
-    display: none;
-}
-.selector .handle {
-    width: 10px;
-    height: 10px;
-    background: #0021ff;
-    position: absolute;
-}
-.handle.tl { left: -5px; top: -5px; }
-.handle.tr { right: -5px; top: -5px; }
-.handle.bl { left: -5px; bottom: -5px; }
-.handle.br { right: -5px; bottom: -5px; }
-
-/* 下部メニュー */
-.bottom-menu {
-    border-top: 2px solid #000;
-    height: 120px;
-    display: none;
-    padding: 10px;
-    display: grid;
-    grid-template-columns: 120px 1fr 150px;
-    gap: 20px;
-}
-
-/* 色メニュー */
-.color-box {
-    border: 2px solid #000;
-    padding: 5px;
-}
-.color-box h3 {
-    margin: 0;
-    font-size: 14px;
-}
-.slider-group {
-    margin-top: 10px;
-}
-.slider-group label {
-    display: block;
-    font-size: 12px;
-}
-
-/* レイヤー */
-.layer-box {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}
-.layer-box button {
-    padding: 5px;
-    border: 2px solid #000;
-    background: #fff;
-}
-
-/* 変形 */
-.transform-box {
-    border: 2px solid #000;
-    padding: 10px;
-}
-.transform-box button {
-    width: 100%;
-    padding: 5px;
-    border: 2px solid #000;
-    background: #fff;
-}
+  :root{
+    --header-bg:#659aff;
+    --select-blue:#0021ff;
+    --panel-bg:#fbfbfd;
+    --panel-border:#dfe3ea;
+    --canvas-bg:#eceef2;
+    --text:#20242c;
+    --muted:#767c8a;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Hiragino Sans",sans-serif;
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    overflow:hidden;
+    background:var(--canvas-bg);
+  }
+  button{font-family:inherit;cursor:pointer;}
+ 
+  /* ===== ヘッダー ===== */
+  .topbar{
+    height:40px;
+    background:var(--header-bg);
+    display:flex;
+    align-items:center;
+    gap:8px;
+    padding:0 10px;
+    position:relative;
+    z-index:500;
+    flex:0 0 40px;
+  }
+  .topbar button{
+    background:#ffffff;
+    border:none;
+    border-radius:5px;
+    height:27px;
+    padding:0 14px;
+    font-size:13px;
+    font-weight:600;
+    color:#1c2333;
+    box-shadow:0 1px 0 rgba(0,0,0,0.12);
+    transition:transform .08s ease, box-shadow .08s ease;
+    white-space:nowrap;
+  }
+  .topbar button:hover{transform:translateY(-1px);box-shadow:0 3px 6px rgba(0,0,0,0.18);}
+  .topbar button:active{transform:translateY(0);}
+  .topbar .logo-btn{
+    font-style:italic;
+    font-weight:800;
+    letter-spacing:.3px;
+  }
+  .file-menu-wrap{position:relative;}
+  .dropdown{
+    position:absolute;
+    top:32px;
+    left:0;
+    background:#ffffff;
+    border:1px solid var(--panel-border);
+    border-radius:8px;
+    box-shadow:0 8px 24px rgba(20,30,60,0.18);
+    padding:6px;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:190px;
+  }
+  .dropdown.hidden{display:none;}
+  .dropdown button{
+    width:100%;
+    text-align:left;
+    background:none;
+    box-shadow:none;
+    border-radius:6px;
+    height:34px;
+    padding:0 10px;
+    font-weight:500;
+  }
+  .dropdown button:hover{background:#eef2ff;transform:none;box-shadow:none;}
+  .topbar .spacer{flex:1;}
+ 
+  /* ===== ワークスペース ===== */
+  .workspace{
+    display:flex;
+    flex:1 1 auto;
+    min-height:0;
+  }
+  .side-panel{
+    width:172px;
+    flex:0 0 172px;
+    background:var(--panel-bg);
+    border-right:1px solid var(--panel-border);
+    padding:14px 12px;
+    overflow-y:auto;
+  }
+  .side-panel.right{border-right:none;border-left:1px solid var(--panel-border);}
+  .panel-block{
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    padding:10px;
+    margin-bottom:14px;
+    background:#ffffff;
+  }
+  .panel-title{
+    font-size:12px;
+    font-weight:700;
+    color:var(--muted);
+    margin-bottom:8px;
+    letter-spacing:.03em;
+  }
+  .tool-btn{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    width:100%;
+    border:1px solid var(--panel-border);
+    background:#fff;
+    border-radius:7px;
+    padding:8px 10px;
+    margin-bottom:6px;
+    font-size:13px;
+    font-weight:500;
+    color:var(--text);
+  }
+  .tool-btn:hover{border-color:var(--header-bg);background:#f2f6ff;}
+  .tool-btn:last-child{margin-bottom:0;}
+  .tool-icon{
+    width:18px;height:18px;flex:0 0 18px;
+    border:2px solid #444;
+    display:inline-block;
+  }
+  .tool-icon.circle{border-radius:50%;}
+  .tool-icon.triangle{
+    width:0;height:0;border:none;
+    border-left:9px solid transparent;
+    border-right:9px solid transparent;
+    border-bottom:16px solid #444;
+  }
+  select, .num-input{
+    width:100%;
+    border:1px solid var(--panel-border);
+    border-radius:6px;
+    padding:6px 8px;
+    font-size:13px;
+    font-family:inherit;
+  }
+  .size-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:8px;
+  }
+  .size-row:last-child{margin-bottom:0;}
+  .size-row label{font-size:12px;color:var(--muted);width:32px;flex:0 0 32px;}
+ 
+  /* ===== キャンバス ===== */
+  .canvas-wrap{
+    flex:1 1 auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:auto;
+    padding:24px;
+    position:relative;
+  }
+  #canvas{
+    position:relative;
+    background:#ffffff;
+    box-shadow:0 2px 18px rgba(30,40,70,0.12);
+    background-image:
+      linear-gradient(45deg,#f4f5f8 25%,transparent 25%),
+      linear-gradient(-45deg,#f4f5f8 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#f4f5f8 75%),
+      linear-gradient(-45deg,transparent 75%,#f4f5f8 75%);
+    background-size:20px 20px;
+    background-position:0 0,0 10px,10px -10px,-10px 0px;
+    overflow:hidden;
+  }
+  .obj{
+    position:absolute;
+    user-select:none;
+  }
+  .obj img, .obj .shape-fill{
+    width:100%;height:100%;display:block;pointer-events:none;
+  }
+  .obj img{object-fit:contain;}
+  .obj .shape-fill.rect{background:#8fb2ff;}
+  .obj .shape-fill.circle{background:#8fb2ff;border-radius:50%;}
+  .obj .shape-fill.triangle{
+    width:100%;height:100%;
+    background:transparent;
+    clip-path:polygon(50% 0%, 0% 100%, 100% 100%);
+    background-color:#8fb2ff;
+  }
+  .obj .tint{
+    position:absolute;inset:0;
+    pointer-events:none;
+    mix-blend-mode:multiply;
+  }
+  .obj.selected{outline:2px solid var(--select-blue);}
+  .handle{
+    position:absolute;
+    width:10px;height:10px;
+    background:var(--select-blue);
+    border:1px solid #ffffff;
+    z-index:10;
+  }
+  .handle.nw{top:-6px;left:-6px;cursor:nwse-resize;}
+  .handle.ne{top:-6px;right:-6px;cursor:nesw-resize;}
+  .handle.sw{bottom:-6px;left:-6px;cursor:nesw-resize;}
+  .handle.se{bottom:-6px;right:-6px;cursor:nwse-resize;}
+ 
+  /* ===== 下部メニュー ===== */
+  .bottom-menu{
+    flex:0 0 auto;
+    height:132px;
+    background:#ffffff;
+    border-top:1px solid var(--panel-border);
+    display:flex;
+    align-items:stretch;
+    gap:14px;
+    padding:12px 16px;
+    box-shadow:0 -4px 16px rgba(20,30,60,0.08);
+    z-index:400;
+  }
+  .bottom-menu.hidden{display:none;}
+  .menu-block{
+    border:1px solid var(--panel-border);
+    border-radius:10px;
+    padding:10px 12px;
+    background:#fbfbfd;
+  }
+  .block-title{
+    font-size:12px;
+    font-weight:700;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .color-block{width:270px;flex:0 0 270px;display:flex;flex-direction:column;}
+  .slider-row{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin:3px 0;
+  }
+  .slider-row label{width:16px;flex:0 0 16px;font-size:12px;font-weight:700;color:var(--text);}
+  .slider-row input[type=range]{flex:1;accent-color:var(--select-blue);}
+  .slider-row .val{width:34px;flex:0 0 34px;font-size:11px;color:var(--muted);text-align:right;}
+  .layer-block{
+    width:150px;flex:0 0 150px;
+    display:flex;flex-direction:column;justify-content:center;gap:6px;
+    border:none;background:none;padding:0;
+  }
+  .layer-block button{
+    background:#ffffff;
+    border:1px solid var(--panel-border);
+    border-radius:7px;
+    padding:7px 0;
+    font-size:12.5px;
+    font-weight:600;
+  }
+  .layer-block button:hover{border-color:var(--header-bg);background:#f2f6ff;}
+  .transform-block{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    width:160px;flex:0 0 160px;
+  }
+  .transform-block button{
+    background:var(--header-bg);
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:12px 18px;
+    font-size:13px;
+    font-weight:700;
+    box-shadow:0 2px 6px rgba(101,154,255,0.4);
+  }
+  .transform-block button:hover{filter:brightness(1.06);}
+  .transform-hint{font-size:11px;color:var(--muted);text-align:center;}
+  .spare-block{flex:1;}
+ 
+  /* ===== モーダル / トースト ===== */
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(20,25,40,0.45);
+    display:flex;align-items:center;justify-content:center;z-index:1000;
+  }
+  .modal-overlay.hidden{display:none;}
+  .modal{
+    background:#fff;border-radius:12px;padding:22px;width:340px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3);
+  }
+  .modal h3{margin:0 0 10px;font-size:16px;}
+  .modal textarea{
+    width:100%;min-height:90px;border:1px solid var(--panel-border);
+    border-radius:8px;padding:8px;font-family:inherit;font-size:13px;resize:vertical;
+  }
+  .modal .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
+  .modal .modal-actions button{
+    border:none;border-radius:7px;padding:8px 16px;font-size:13px;font-weight:600;
+  }
+  .modal .btn-cancel{background:#eef0f4;color:var(--text);}
+  .modal .btn-submit{background:var(--header-bg);color:#fff;}
+  .toast{
+    position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:#1c2333;color:#fff;padding:11px 20px;border-radius:8px;
+    font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,0.3);
+    opacity:0;transition:opacity .25s ease, transform .25s ease;
+    z-index:2000;pointer-events:none;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .loading-mask{
+    position:fixed;inset:0;background:rgba(255,255,255,0.55);
+    display:flex;align-items:center;justify-content:center;z-index:1500;
+    font-size:13px;color:var(--muted);font-weight:600;
+  }
+  .loading-mask.hidden{display:none;}
 </style>
 </head>
 <body>
-
-<div class="header">
-    <button>UI's</button>
-    <button>新規作成</button>
-    <button>ファイル</button>
-    <button>フィードバック</button>
-</div>
-
-<div class="canvas" id="canvas">
-    <img id="img1" src="https://via.placeholder.com/150" 
-         style="position:absolute; left:150px; top:80px; cursor:pointer;">
-    
-    <div class="selector" id="selector">
-        <div class="handle tl"></div>
-        <div class="handle tr"></div>
-        <div class="handle bl"></div>
-        <div class="handle br"></div>
+ 
+  <header class="topbar">
+    <button class="logo-btn" id="btnHome" title="ホームへ戻る">UI's</button>
+    <button id="btnNew">新規作成</button>
+    <div class="file-menu-wrap">
+      <button id="btnFile">ファイル ▾</button>
+      <div class="dropdown hidden" id="fileMenu">
+        <button data-action="savezip">ZIPファイルで保存</button>
+        <button data-action="savepdf">PDFファイルで保存</button>
+        <button data-action="replacezip">ZIPファイルで置き換える</button>
+      </div>
     </div>
-</div>
-
-<div class="bottom-menu" id="menu">
-    <div class="color-box">
-        <h3>色</h3>
-        <div class="slider-group">
-            <label>R <input type="range" min="0" max="255"></label>
-            <label>G <input type="range" min="0" max="255"></label>
-            <label>B <input type="range" min="0" max="255"></label>
-            <label>A <input type="range" min="0" max="1" step="0.01"></label>
+    <button id="btnFeedback">フィードバック</button>
+    <div class="spacer"></div>
+  </header>
+ 
+  <div class="workspace">
+    <aside class="side-panel left">
+      <div class="panel-block">
+        <div class="panel-title">図形を追加</div>
+        <button class="tool-btn" data-shape="rect"><span class="tool-icon rect"></span>四角形</button>
+        <button class="tool-btn" data-shape="triangle"><span class="tool-icon triangle"></span>三角形</button>
+        <button class="tool-btn" data-shape="circle"><span class="tool-icon circle"></span>円</button>
+      </div>
+      <div class="panel-block">
+        <div class="panel-title">画像</div>
+        <button class="tool-btn" id="btnAddImage">＋ 画像を追加</button>
+        <input type="file" id="imageInput" accept="image/*" hidden>
+      </div>
+    </aside>
+ 
+    <main class="canvas-wrap">
+      <div id="canvas" style="width:420px;height:280px;"></div>
+    </main>
+ 
+    <aside class="side-panel right">
+      <div class="panel-block">
+        <div class="panel-title">デフォルトの機種</div>
+        <select id="deviceSelect">
+          <option value="420x280">標準キャンバス</option>
+          <option value="375x667">iPhone (縦)</option>
+          <option value="768x1024">iPad (縦)</option>
+          <option value="1080x1080">Instagram 投稿</option>
+          <option value="1200x630">OGP画像</option>
+          <option value="custom">カスタム</option>
+        </select>
+      </div>
+      <div class="panel-block">
+        <div class="panel-title">サイズ</div>
+        <div class="size-row">
+          <label>幅</label>
+          <input type="number" class="num-input" id="canvasW" value="420" min="40" max="4000">
         </div>
+        <div class="size-row">
+          <label>高さ</label>
+          <input type="number" class="num-input" id="canvasH" value="280" min="40" max="4000">
+        </div>
+      </div>
+    </aside>
+  </div>
+ 
+  <div class="bottom-menu hidden" id="bottomMenu">
+    <div class="menu-block color-block">
+      <div class="block-title">色</div>
+      <div class="slider-row"><label>R</label><input type="range" id="sliderR" min="0" max="255" value="255"><span class="val" id="valR">255</span></div>
+      <div class="slider-row"><label>G</label><input type="range" id="sliderG" min="0" max="255" value="255"><span class="val" id="valG">255</span></div>
+      <div class="slider-row"><label>B</label><input type="range" id="sliderB" min="0" max="255" value="255"><span class="val" id="valB">255</span></div>
+      <div class="slider-row"><label>A</label><input type="range" id="sliderA" min="0" max="1" step="0.01" value="1"><span class="val" id="valA">1.00</span></div>
     </div>
-
-    <div class="layer-box">
-        <button>前面</button>
-        <button>背面</button>
-        <button>最前面</button>
-        <button>最背面</button>
+    <div class="menu-block layer-block">
+      <button data-layer="front">前面</button>
+      <button data-layer="back">背面</button>
+      <button data-layer="front-most">最前面</button>
+      <button data-layer="back-most">最背面</button>
     </div>
-
-    <div class="transform-box">
-        <button>変形させる</button>
+    <div class="menu-block transform-block">
+      <button id="btnTransform">変形させる</button>
+      <div class="transform-hint">クリックで回転／反転</div>
     </div>
-</div>
-
+    <div class="spare-block"></div>
+  </div>
+ 
+  <!-- フィードバックモーダル -->
+  <div class="modal-overlay hidden" id="feedbackOverlay">
+    <div class="modal">
+      <h3>フィードバック</h3>
+      <textarea id="feedbackText" placeholder="ご意見・ご要望をご記入ください"></textarea>
+      <div class="modal-actions">
+        <button class="btn-cancel" id="feedbackCancel">キャンセル</button>
+        <button class="btn-submit" id="feedbackSubmit">送信する</button>
+      </div>
+    </div>
+  </div>
+ 
+  <input type="file" id="zipInput" accept=".zip" hidden>
+ 
+  <div class="loading-mask hidden" id="loadingMask">書き出し中…</div>
+  <div class="toast" id="toast"></div>
+ 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-const img = document.getElementById("img1");
-const selector = document.getElementById("selector");
-const menu = document.getElementById("menu");
-
-img.addEventListener("click", () => {
-    selector.style.display = "block";
-    menu.style.display = "grid";
-
-    selector.style.left = img.style.left;
-    selector.style.top = img.style.top;
-    selector.style.width = img.width + "px";
-    selector.style.height = img.height + "px";
-});
+(function(){
+  "use strict";
+ 
+  /* ---------- 初期サンプル画像（外部依存なしのSVG） ---------- */
+  const SAMPLE_IMAGE = "data:image/svg+xml;utf8," + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200">'+
+    '<rect width="300" height="200" fill="#cfe0ff"/>'+
+    '<rect x="8" y="8" width="284" height="184" fill="none" stroke="#659aff" stroke-width="3" stroke-dasharray="6 6"/>'+
+    '<text x="150" y="105" font-size="20" font-family="sans-serif" fill="#33415c" text-anchor="middle">サンプル画像</text>'+
+    '</svg>'
+  );
+ 
+  /* ---------- 状態 ---------- */
+  let objects = [];      // {id, type:'image'|'shape', shapeType, src, x,y,w,h, rot, flip, color:{r,g,b,a}}
+  let selectedId = null;
+  let uid = 1;
+  let drag = null;       // ドラッグ／リサイズ中の情報
+ 
+  const canvas = document.getElementById('canvas');
+  const bottomMenu = document.getElementById('bottomMenu');
+  const canvasW = document.getElementById('canvasW');
+  const canvasH = document.getElementById('canvasH');
+  const deviceSelect = document.getElementById('deviceSelect');
+ 
+  /* ---------- 初期オブジェクト ---------- */
+  function addInitialImage(){
+    objects.push({
+      id: uid++, type:'image', src: SAMPLE_IMAGE,
+      x:60, y:40, w:300, h:200, rot:0, flip:false,
+      color:{r:255,g:255,b:255,a:1}
+    });
+  }
+  addInitialImage();
+ 
+  /* ---------- 描画 ---------- */
+  function render(){
+    canvas.innerHTML = '';
+    objects.forEach(obj=>{
+      const el = document.createElement('div');
+      el.className = 'obj' + (obj.id===selectedId ? ' selected' : '');
+      el.style.left = obj.x+'px';
+      el.style.top = obj.y+'px';
+      el.style.width = obj.w+'px';
+      el.style.height = obj.h+'px';
+      el.style.transform = `rotate(${obj.rot}deg) scaleX(${obj.flip?-1:1})`;
+      el.dataset.id = obj.id;
+ 
+      if(obj.type==='image'){
+        const img = document.createElement('img');
+        img.src = obj.src;
+        img.draggable = false;
+        img.style.opacity = obj.color.a;
+        el.appendChild(img);
+        const tint = document.createElement('div');
+        tint.className = 'tint';
+        tint.style.background = `rgba(${obj.color.r},${obj.color.g},${obj.color.b},${obj.color.a*0.45})`;
+        el.appendChild(tint);
+      } else {
+        const fill = document.createElement('div');
+        fill.className = 'shape-fill ' + obj.shapeType;
+        fill.style.background = `rgba(${obj.color.r},${obj.color.g},${obj.color.b},${obj.color.a})`;
+        el.appendChild(fill);
+      }
+ 
+      if(obj.id===selectedId){
+        ['nw','ne','sw','se'].forEach(pos=>{
+          const h = document.createElement('div');
+          h.className = 'handle '+pos;
+          h.dataset.handle = pos;
+          el.appendChild(h);
+        });
+      }
+      canvas.appendChild(el);
+    });
+    bottomMenu.classList.toggle('hidden', selectedId===null);
+    if(selectedId!==null) syncColorSliders();
+  }
+ 
+  function getObj(id){ return objects.find(o=>o.id===id); }
+ 
+  /* ---------- 選択 ---------- */
+  canvas.addEventListener('mousedown', (e)=>{
+    const objEl = e.target.closest('.obj');
+    const handleEl = e.target.closest('.handle');
+    if(handleEl){
+      const id = Number(handleEl.closest('.obj').dataset.id);
+      startResize(id, handleEl.dataset.handle, e);
+      return;
+    }
+    if(objEl){
+      const id = Number(objEl.dataset.id);
+      selectedId = id;
+      render();
+      startDrag(id, e);
+    } else {
+      selectedId = null;
+      render();
+    }
+  });
+ 
+  function startDrag(id, e){
+    const obj = getObj(id);
+    drag = {mode:'move', id, startX:e.clientX, startY:e.clientY, ox:obj.x, oy:obj.y};
+  }
+  function startResize(id, handle, e){
+    e.stopPropagation();
+    const obj = getObj(id);
+    drag = {mode:'resize', handle, id, startX:e.clientX, startY:e.clientY,
+             ox:obj.x, oy:obj.y, ow:obj.w, oh:obj.h};
+  }
+ 
+  window.addEventListener('mousemove', (e)=>{
+    if(!drag) return;
+    const obj = getObj(drag.id);
+    if(!obj) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
+ 
+    if(drag.mode==='move'){
+      obj.x = drag.ox + dx;
+      obj.y = drag.oy + dy;
+    } else {
+      const minSize = 20;
+      if(drag.handle==='se'){
+        obj.w = Math.max(minSize, drag.ow + dx);
+        obj.h = Math.max(minSize, drag.oh + dy);
+      } else if(drag.handle==='sw'){
+        obj.w = Math.max(minSize, drag.ow - dx);
+        obj.h = Math.max(minSize, drag.oh + dy);
+        obj.x = drag.ox + (drag.ow - obj.w);
+      } else if(drag.handle==='ne'){
+        obj.w = Math.max(minSize, drag.ow + dx);
+        obj.h = Math.max(minSize, drag.oh - dy);
+        obj.y = drag.oy + (drag.oh - obj.h);
+      } else if(drag.handle==='nw'){
+        obj.w = Math.max(minSize, drag.ow - dx);
+        obj.h = Math.max(minSize, drag.oh - dy);
+        obj.x = drag.ox + (drag.ow - obj.w);
+        obj.y = drag.oy + (drag.oh - obj.h);
+      }
+    }
+    render();
+  });
+  window.addEventListener('mouseup', ()=>{ drag = null; });
+ 
+  /* ---------- 図形追加 ---------- */
+  document.querySelectorAll('[data-shape]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const shapeType = btn.dataset.shape;
+      objects.push({
+        id: uid++, type:'shape', shapeType,
+        x:40, y:40, w:100, h:100, rot:0, flip:false,
+        color:{r:143,g:178,b:255,a:1}
+      });
+      selectedId = uid-1;
+      render();
+    });
+  });
+ 
+  /* ---------- 画像追加 ---------- */
+  const imageInput = document.getElementById('imageInput');
+  document.getElementById('btnAddImage').addEventListener('click', ()=> imageInput.click());
+  imageInput.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev)=>{
+      objects.push({
+        id: uid++, type:'image', src: ev.target.result,
+        x:40, y:40, w:220, h:160, rot:0, flip:false,
+        color:{r:255,g:255,b:255,a:1}
+      });
+      selectedId = uid-1;
+      render();
+    };
+    reader.readAsDataURL(file);
+    imageInput.value = '';
+  });
+ 
+  /* ---------- 色スライダー ---------- */
+  const sliderR = document.getElementById('sliderR');
+  const sliderG = document.getElementById('sliderG');
+  const sliderB = document.getElementById('sliderB');
+  const sliderA = document.getElementById('sliderA');
+  const valR = document.getElementById('valR');
+  const valG = document.getElementById('valG');
+  const valB = document.getElementById('valB');
+  const valA = document.getElementById('valA');
+ 
+  function syncColorSliders(){
+    const obj = getObj(selectedId);
+    if(!obj) return;
+    sliderR.value = obj.color.r; valR.textContent = obj.color.r;
+    sliderG.value = obj.color.g; valG.textContent = obj.color.g;
+    sliderB.value = obj.color.b; valB.textContent = obj.color.b;
+    sliderA.value = obj.color.a; valA.textContent = obj.color.a.toFixed(2);
+  }
+  function onColorInput(){
+    const obj = getObj(selectedId);
+    if(!obj) return;
+    obj.color.r = Number(sliderR.value);
+    obj.color.g = Number(sliderG.value);
+    obj.color.b = Number(sliderB.value);
+    obj.color.a = Number(sliderA.value);
+    valR.textContent = obj.color.r;
+    valG.textContent = obj.color.g;
+    valB.textContent = obj.color.b;
+    valA.textContent = obj.color.a.toFixed(2);
+    render();
+  }
+  [sliderR,sliderG,sliderB,sliderA].forEach(s=> s.addEventListener('input', onColorInput));
+ 
+  /* ---------- レイヤー操作 ---------- */
+  document.querySelectorAll('.layer-block [data-layer]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      console.log('レイヤー操作:', btn.dataset.layer, 'target id:', selectedId);
+      if(selectedId===null) return;
+      const idx = objects.findIndex(o=>o.id===selectedId);
+      if(idx===-1) return;
+      const [obj] = objects.splice(idx,1);
+      switch(btn.dataset.layer){
+        case 'front':
+          objects.splice(Math.min(idx+1, objects.length), 0, obj); break;
+        case 'back':
+          objects.splice(Math.max(idx-1, 0), 0, obj); break;
+        case 'front-most':
+          objects.push(obj); break;
+        case 'back-most':
+          objects.unshift(obj); break;
+      }
+      render();
+    });
+  });
+ 
+  /* ---------- 変形 ---------- */
+  document.getElementById('btnTransform').addEventListener('click', ()=>{
+    const obj = getObj(selectedId);
+    if(!obj) return;
+    obj.rot = (obj.rot + 15) % 360;
+    if(obj.rot === 0){ obj.flip = !obj.flip; } // 一周したら反転も加える
+    render();
+  });
+ 
+  /* ---------- キャンバスサイズ / 機種 ---------- */
+  function applyCanvasSize(w,h){
+    canvas.style.width = w+'px';
+    canvas.style.height = h+'px';
+  }
+  canvasW.addEventListener('input', ()=>{
+    deviceSelect.value = 'custom';
+    applyCanvasSize(Number(canvasW.value)||40, Number(canvasH.value)||40);
+  });
+  canvasH.addEventListener('input', ()=>{
+    deviceSelect.value = 'custom';
+    applyCanvasSize(Number(canvasW.value)||40, Number(canvasH.value)||40);
+  });
+  deviceSelect.addEventListener('change', ()=>{
+    if(deviceSelect.value==='custom') return;
+    const [w,h] = deviceSelect.value.split('x').map(Number);
+    canvasW.value = w; canvasH.value = h;
+    applyCanvasSize(w,h);
+  });
+ 
+  /* ---------- ヘッダー：ホーム / 新規作成 ---------- */
+  document.getElementById('btnHome').addEventListener('click', ()=>{
+    window.location.href = 'home.html';
+  });
+ 
+  document.getElementById('btnNew').addEventListener('click', ()=>{
+    if(objects.length===0 || confirm('新規作成すると現在の編集内容は失われます。よろしいですか？')){
+      objects = [];
+      selectedId = null;
+      uid = 1;
+      canvasW.value = 420; canvasH.value = 280; deviceSelect.value = '420x280';
+      applyCanvasSize(420,280);
+      render();
+      showToast('新しいプロジェクトを作成しました');
+    }
+  });
+ 
+  /* ---------- ファイルメニュー ---------- */
+  const btnFile = document.getElementById('btnFile');
+  const fileMenu = document.getElementById('fileMenu');
+  btnFile.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    fileMenu.classList.toggle('hidden');
+  });
+  document.addEventListener('click', ()=> fileMenu.classList.add('hidden'));
+  fileMenu.addEventListener('click', (e)=> e.stopPropagation());
+ 
+  const loadingMask = document.getElementById('loadingMask');
+  function setLoading(on, msg){
+    loadingMask.textContent = msg || '書き出し中…';
+    loadingMask.classList.toggle('hidden', !on);
+  }
+ 
+  function downloadBlob(blob, filename){
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=> URL.revokeObjectURL(url), 4000);
+  }
+ 
+  async function captureCanvas(){
+    // キャプチャ中は選択枠・ハンドルを一時的に隠す
+    const prevSelected = selectedId;
+    selectedId = null;
+    render();
+    await new Promise(r=>setTimeout(r, 30));
+    const shot = await html2canvas(canvas, {backgroundColor:'#ffffff', scale:2});
+    selectedId = prevSelected;
+    render();
+    return shot;
+  }
+ 
+  async function saveAsZip(){
+    setLoading(true, 'ZIPを作成中…');
+    try{
+      const shot = await captureCanvas();
+      const dataUrl = shot.toDataURL('image/png');
+      const zip = new JSZip();
+      zip.file('design.png', dataUrl.split(',')[1], {base64:true});
+      zip.file('project.json', JSON.stringify({objects}, null, 2));
+      const blob = await zip.generateAsync({type:'blob'});
+      downloadBlob(blob, 'ui-design.zip');
+      showToast('ZIPファイルを保存しました');
+    }catch(err){
+      console.error(err);
+      showToast('ZIPの作成に失敗しました');
+    }finally{
+      setLoading(false);
+    }
+  }
+ 
+  async function saveAsPdf(){
+    setLoading(true, 'PDFを作成中…');
+    try{
+      const shot = await captureCanvas();
+      const dataUrl = shot.toDataURL('image/png');
+      const { jsPDF } = window.jspdf;
+      const w = shot.width, h = shot.height;
+      const pdf = new jsPDF({
+        orientation: w >= h ? 'landscape' : 'portrait',
+        unit: 'pt',
+        format: [w/2, h/2]
+      });
+      pdf.addImage(dataUrl, 'PNG', 0, 0, w/2, h/2);
+      pdf.save('ui-design.pdf');
+      showToast('PDFファイルを保存しました');
+    }catch(err){
+      console.error(err);
+      showToast('PDFの作成に失敗しました');
+    }finally{
+      setLoading(false);
+    }
+  }
+ 
+  const zipInput = document.getElementById('zipInput');
+  function triggerReplaceZip(){
+    zipInput.click();
+  }
+  zipInput.addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    zipInput.value = '';
+    if(!file) return;
+    setLoading(true, 'ZIPを読み込み中…');
+    try{
+      const zip = await JSZip.loadAsync(file);
+      let imageEntry = null;
+      let imageName = null;
+      zip.forEach((path, entry)=>{
+        if(!imageEntry && /\.(png|jpe?g|gif|webp|svg)$/i.test(path)){
+          imageEntry = entry;
+          imageName = path;
+        }
+      });
+      if(!imageEntry){
+        showToast('ZIP内に画像ファイルが見つかりませんでした');
+        return;
+      }
+      const ext = imageName.split('.').pop().toLowerCase();
+      const mime = ext==='svg' ? 'image/svg+xml' : (ext==='jpg' ? 'image/jpeg' : 'image/'+ext);
+      const base64 = await imageEntry.async('base64');
+      const dataUrl = `data:${mime};base64,${base64}`;
+ 
+      const existingImage = objects.find(o=>o.type==='image');
+      if(existingImage){
+        existingImage.src = dataUrl;
+      } else {
+        objects.push({
+          id: uid++, type:'image', src: dataUrl,
+          x:40, y:40, w:220, h:160, rot:0, flip:false,
+          color:{r:255,g:255,b:255,a:1}
+        });
+      }
+      render();
+      showToast('ZIPファイルから画像を置き換えました');
+    }catch(err){
+      console.error(err);
+      showToast('ZIPの読み込みに失敗しました');
+    }finally{
+      setLoading(false);
+    }
+  });
+ 
+  fileMenu.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-action]');
+    if(!btn) return;
+    fileMenu.classList.add('hidden');
+    const action = btn.dataset.action;
+    if(action==='savezip') saveAsZip();
+    else if(action==='savepdf') saveAsPdf();
+    else if(action==='replacezip') triggerReplaceZip();
+  });
+ 
+  /* ---------- フィードバック ---------- */
+  const feedbackOverlay = document.getElementById('feedbackOverlay');
+  const feedbackText = document.getElementById('feedbackText');
+  document.getElementById('btnFeedback').addEventListener('click', ()=>{
+    feedbackOverlay.classList.remove('hidden');
+    feedbackText.focus();
+  });
+  document.getElementById('feedbackCancel').addEventListener('click', ()=>{
+    feedbackOverlay.classList.add('hidden');
+  });
+  document.getElementById('feedbackSubmit').addEventListener('click', ()=>{
+    if(feedbackText.value.trim()===''){
+      showToast('内容を入力してください');
+      return;
+    }
+    feedbackOverlay.classList.add('hidden');
+    feedbackText.value = '';
+    showToast('フィードバックを受け付けました。ありがとうございます！');
+  });
+ 
+  /* ---------- トースト ---------- */
+  let toastTimer = null;
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> t.classList.remove('show'), 2600);
+  }
+ 
+  /* ---------- 初期描画 ---------- */
+  applyCanvasSize(420,280);
+  render();
+})();
 </script>
-
 </body>
 </html>
