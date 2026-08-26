@@ -671,6 +671,39 @@ textarea{
 }
 
 
+/* Text edit */
+
+.text-edit-wrap{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+
+.text-edit-area{
+  width:100%;
+
+  border:1px solid var(--panel-border);
+
+  border-radius:8px;
+
+  padding:8px;
+
+  font-family:var(--ui-font);
+
+  font-size:13px;
+
+  color:var(--ink);
+
+  resize:vertical;
+
+  outline:none;
+}
+
+.text-edit-area:focus{
+  border-color:var(--accent);
+}
+
+
 /* Panel Buttons */
 
 .btn-row{
@@ -952,6 +985,12 @@ svg.artboard{
     <div class="right-panel" id="rightPanel">
       <div class="panel-title" id="transformToggle">変形させる</div>
       <div class="panel-hint" id="transformHint"></div>
+
+      <div class="text-edit-wrap" id="textEditWrap" style="display:none;">
+        <div class="color-label">テキスト内容</div>
+        <textarea id="textEditArea" class="text-edit-area" rows="3"></textarea>
+      </div>
+
       <div class="btn-row">
         <button class="panel-btn" id="frontBtn" type="button">前面</button>
         <button class="panel-btn" id="backBtn" type="button">背面</button>
@@ -1008,6 +1047,8 @@ const filenameInput = document.getElementById('filenameInput');
 const renameBtn = document.getElementById('renameBtn');
 const toolHint = document.getElementById('toolHint');
 const transformHint = document.getElementById('transformHint');
+const textEditWrap = document.getElementById('textEditWrap');
+const textEditArea = document.getElementById('textEditArea');
 
 /* ================= Utility ================= */
 function uid(){ return ++idCounter; }
@@ -1109,6 +1150,7 @@ function render(){
             h.setAttribute('x', pt.x-sz/2); h.setAttribute('y', pt.y-sz/2);
             h.setAttribute('width', sz); h.setAttribute('height', sz);
             h.classList.add('handle');
+            h.dataset.vertex = i;
             h.style.cursor='move';
             h.addEventListener('pointerdown',(e)=>onVertexPointerDown(e, s, i));
             artboard.appendChild(h);
@@ -1146,9 +1188,9 @@ function updateToolUI(){
   });
   const hints = {
     select: '図形をクリックして選択・ドラッグで移動できます',
-    rect:   'キャンバス上をドラッグして四角形を描きます',
-    triangle:'キャンバス上をドラッグして三角形を描きます',
-    circle: 'キャンバス上をドラッグして円を描きます',
+    rect:   'ドラッグで四角形を描きます（Shiftで正方形）',
+    triangle:'ドラッグで三角形を描きます（Shiftで正三角形）',
+    circle: 'ドラッグで円を描きます（Shiftで正円）',
     text:   'キャンバスをクリックしてテキストを配置します',
     pen:    'キャンバス上をドラッグして自由に描けます',
     eraser: '図形をクリックすると削除します'
@@ -1164,12 +1206,29 @@ function updateRightPanel(){
   transformHint.textContent = (s.type==='rect'||s.type==='triangle')
     ? '頂点をドラッグして自由に変形できます'
     : '四隅・辺のハンドルでサイズを変更できます';
+
+  if(s.type === 'text'){
+    textEditWrap.style.display = 'flex';
+    if(document.activeElement !== textEditArea){
+      textEditArea.value = s.text;
+    }
+  } else {
+    textEditWrap.style.display = 'none';
+  }
+
   document.getElementById('rSlider').value = s.color.r;
   document.getElementById('gSlider').value = s.color.g;
   document.getElementById('bSlider').value = s.color.b;
   document.getElementById('aSlider').value = Math.round(s.color.a*100);
   document.getElementById('colorSwatch').style.background = rgba(s.color);
 }
+
+textEditArea.addEventListener('input', ()=>{
+  const s = getSelected();
+  if(!s || s.type!=='text') return;
+  s.text = textEditArea.value || ' ';
+  updateShapeDom(s);
+});
 
 /* ================= Coordinates ================= */
 function svgPoint(evt){
@@ -1210,10 +1269,29 @@ function updatePreview(){
 function onShapeDrawMove(e){
   if(!shapeDrawState) return;
   const p = svgPoint(e);
-  const x = Math.min(p.x, shapeDrawState.startX);
-  const y = Math.min(p.y, shapeDrawState.startY);
-  const w = Math.abs(p.x - shapeDrawState.startX);
-  const h = Math.abs(p.y - shapeDrawState.startY);
+  const rawDx = p.x - shapeDrawState.startX;
+  const rawDy = p.y - shapeDrawState.startY;
+  let w = Math.abs(rawDx);
+  let h = Math.abs(rawDy);
+
+  if(e.shiftKey){
+    if(shapeDrawState.type === 'triangle'){
+      // constrain to an equilateral triangle: height = base * sqrt(3)/2
+      const ratio = Math.sqrt(3)/2;
+      const side = Math.max(w, h/ratio);
+      w = side;
+      h = side*ratio;
+    } else {
+      // square / perfect circle
+      const side = Math.max(w,h);
+      w = side;
+      h = side;
+    }
+  }
+
+  const x = rawDx >= 0 ? shapeDrawState.startX : shapeDrawState.startX - w;
+  const y = rawDy >= 0 ? shapeDrawState.startY : shapeDrawState.startY - h;
+
   shapeDrawState.current = {x,y,w,h};
   updatePreview();
 }
@@ -1257,6 +1335,64 @@ function createTextAt(cx,cy){
 /* ================= Move / resize / vertex-drag ================= */
 let dragState = null;
 
+/* Lightweight, in-place DOM updates used *during* a drag so nothing gets
+   torn down/rebuilt mid-gesture (rebuilding elements mid-drag is what was
+   breaking vertex dragging). A full render() only happens once, on pointerup. */
+function updateShapeDom(shape){
+  const el = artboard.querySelector(`[data-id="${shape.id}"]`);
+  if(!el) return;
+  if(shape.type==='rect' || shape.type==='triangle'){
+    el.setAttribute('points', shape.points.map(p=>`${p.x},${p.y}`).join(' '));
+  } else if(shape.type==='circle'){
+    el.setAttribute('cx', shape.x+shape.w/2);
+    el.setAttribute('cy', shape.y+shape.h/2);
+    el.setAttribute('rx', shape.w/2);
+    el.setAttribute('ry', shape.h/2);
+  } else if(shape.type==='text'){
+    el.setAttribute('x', shape.x);
+    el.setAttribute('y', shape.y);
+    el.setAttribute('font-size', Math.max(10, shape.h*0.6));
+    el.textContent = shape.text;
+  } else if(shape.type==='path'){
+    let d = '';
+    shape.points.forEach((p,i)=>{ d += (i===0?'M':'L') + p.x + ' ' + p.y + ' '; });
+    el.setAttribute('d', d);
+  }
+}
+function updateSelectionOverlay(shape){
+  const box = getBBox(shape);
+  const selBox = artboard.querySelector('.sel-box');
+  if(selBox){
+    selBox.setAttribute('x', box.x); selBox.setAttribute('y', box.y);
+    selBox.setAttribute('width', box.w); selBox.setAttribute('height', box.h);
+  }
+  if(shape.type==='rect' || shape.type==='triangle'){
+    shape.points.forEach((pt,i)=>{
+      const h = artboard.querySelector(`.handle[data-vertex="${i}"]`);
+      if(h){
+        const sz=10;
+        h.setAttribute('x', pt.x-sz/2);
+        h.setAttribute('y', pt.y-sz/2);
+      }
+    });
+  } else if(shape.type==='circle' || shape.type==='text' || shape.type==='path'){
+    const dirPositions = {
+      nw:[box.x, box.y], n:[box.x+box.w/2, box.y], ne:[box.x+box.w, box.y],
+      w:[box.x, box.y+box.h/2], e:[box.x+box.w, box.y+box.h/2],
+      sw:[box.x, box.y+box.h], s:[box.x+box.w/2, box.y+box.h], se:[box.x+box.w, box.y+box.h]
+    };
+    Object.keys(dirPositions).forEach(dir=>{
+      const h = artboard.querySelector(`.handle[data-dir="${dir}"]`);
+      if(h){
+        const [hx,hy] = dirPositions[dir];
+        const sz=9;
+        h.setAttribute('x', hx-sz/2);
+        h.setAttribute('y', hy-sz/2);
+      }
+    });
+  }
+}
+
 function onShapePointerDown(e, shape){
   e.stopPropagation();
   if(currentTool==='eraser'){
@@ -1279,6 +1415,7 @@ function onShapePointerDown(e, shape){
 
 function onVertexPointerDown(e, shape, index){
   e.stopPropagation();
+  e.preventDefault();
   const start = svgPoint(e);
   dragState = { mode:'vertex', shape, index, startX:start.x, startY:start.y, orig: {...shape.points[index]} };
   window.addEventListener('pointermove', onWindowPointerMove);
@@ -1287,6 +1424,7 @@ function onVertexPointerDown(e, shape, index){
 
 function onHandlePointerDown(e, shape, dir){
   e.stopPropagation();
+  e.preventDefault();
   const start = svgPoint(e);
   dragState = { mode:'resize', shape, dir, startX:start.x, startY:start.y, orig: JSON.parse(JSON.stringify(shape)) };
   window.addEventListener('pointermove', onWindowPointerMove);
@@ -1330,13 +1468,16 @@ function onWindowPointerMove(e){
     }
     shape.x=x; shape.y=y; shape.w=w; shape.h=h;
   }
-  render();
+
+  updateShapeDom(shape);
+  updateSelectionOverlay(shape);
 }
 
 function onWindowPointerUp(){
-  dragState = null;
   window.removeEventListener('pointermove', onWindowPointerMove);
   window.removeEventListener('pointerup', onWindowPointerUp);
+  dragState = null;
+  render();
 }
 
 /* ================= Pen tool ================= */
@@ -1753,7 +1894,7 @@ document.getElementById('zipLoadInput').addEventListener('change', async (e)=>{
 
 /* ================= Keyboard delete ================= */
 window.addEventListener('keydown',(e)=>{
-  if(document.activeElement === filenameInput) return;
+  if(document.activeElement === filenameInput || document.activeElement === textEditArea) return;
   if((e.key==='Delete' || e.key==='Backspace') && selectedId!==null){
     shapes = shapes.filter(s=>s.id!==selectedId);
     selectedId = null;
