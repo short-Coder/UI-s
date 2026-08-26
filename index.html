@@ -4,159 +4,865 @@
 <meta charset="UTF-8">
 <title>UI's Editor</title>
 <style>
-  :root{
-    --accent:#3559E0;
-    --accent-dark:#233C99;
-    --accent-soft:#E4EAFF;
-    --panel-bg:#F1F3F8;
-    --panel-border:#D8DCE6;
-    --ink:#1A1D29;
-    --ink-soft:#6B7080;
-    --canvas-bg:#E7EAF1;
-    --page-bg:#FFFFFF;
-    --danger:#E0473E;
-    --danger-soft:#FCE4E2;
-  }
-  *{box-sizing:border-box;}
-  html,body{height:100%;margin:0;}
-  body{
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
-    color:var(--ink);
-    -webkit-user-select:none;user-select:none;
-    overflow:hidden;
-  }
-  #app{display:flex;flex-direction:column;height:100vh;background:var(--canvas-bg);}
 
-  /* ---------- Top bar ---------- */
-  .topbar{
-    height:58px;flex:0 0 auto;
-    background:linear-gradient(180deg,var(--accent) 0%, var(--accent-dark) 100%);
-    display:flex;align-items:center;gap:10px;padding:0 14px;
-    box-shadow:0 2px 8px rgba(0,0,0,.18);
-    position:relative;z-index:50;
-  }
-  .logo{
-    color:#fff;font-weight:800;font-size:18px;letter-spacing:.5px;
-    padding:6px 12px;font-style:italic;
-  }
-  .pill-btn{
-    background:#fff;color:var(--ink);border:none;border-radius:9px;
-    padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer;
-    box-shadow:0 1px 2px rgba(0,0,0,.12);
-    transition:transform .12s ease, box-shadow .12s ease;
-  }
-  .pill-btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.18);}
-  .pill-btn:active{transform:translateY(0);}
-  .dropdown-wrap{position:relative;}
-  .dropdown{
-    position:absolute;top:calc(100% + 8px);left:0;background:#fff;border-radius:10px;
-    box-shadow:0 10px 30px rgba(0,0,0,.22);padding:6px;min-width:200px;
-    display:flex;flex-direction:column;gap:2px;z-index:60;
-  }
-  .dropdown button, .dropdown label{
-    background:none;border:none;text-align:left;padding:10px 12px;border-radius:7px;
-    font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;display:block;width:100%;
-  }
-  .dropdown button:hover, .dropdown label:hover{background:var(--accent-soft);}
-  .dropdown select{
-    width:100%;padding:8px;border-radius:7px;border:1px solid var(--panel-border);font-size:13px;margin-top:4px;
-  }
-  .dropdown .section-title{font-size:11px;color:var(--ink-soft);padding:6px 12px 0;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+/* ===============================
+   けいふぉんと
+   =============================== */
 
-  .filename-box{
-    margin-left:auto;display:flex;align-items:center;gap:6px;background:#fff;border-radius:9px;
-    padding:6px 10px 6px 14px;box-shadow:0 1px 2px rgba(0,0,0,.12);
-  }
-  .filename-box input{
-    border:none;outline:none;font-weight:700;font-size:14px;font-family:inherit;width:130px;color:var(--ink);
-    background:transparent;
-  }
-  .icon-btn{
-    width:28px;height:28px;border-radius:6px;border:none;background:var(--accent-soft);
-    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--accent-dark);
-  }
-  .icon-btn:hover{background:var(--accent);color:#fff;}
+@font-face {
+  font-family: "Keifont.ttf";
+  src: url("./Keifont.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
 
-  /* ---------- Main layout ---------- */
-  .main{flex:1;display:flex;overflow:hidden;position:relative;}
 
-  /* Left tool dock */
-  .dock-toggle{
-    position:absolute;top:16px;left:16px;z-index:30;
-    width:40px;height:40px;border-radius:10px;background:var(--ink);color:#fff;border:none;
-    display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;
-    box-shadow:0 4px 12px rgba(0,0,0,.25);transition:left .18s ease;
-  }
-  .dock-toggle:hover{background:#000;}
-  .toolpanel{
-    position:absolute;top:16px;left:16px;z-index:25;
-    background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:14px;
-    padding:56px 12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.16);
-    display:grid;grid-template-columns:1fr 1fr;gap:8px;width:172px;
-    transform:translateX(-220px);opacity:0;pointer-events:none;transition:all .18s ease;
-  }
-  .toolpanel.open{transform:translateX(0);opacity:1;pointer-events:auto;}
-  .tool-btn{
-    background:#fff;border:1px solid var(--panel-border);border-radius:10px;padding:10px 4px 8px;
-    display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:11.5px;font-weight:600;
-    color:var(--ink);
-  }
-  .tool-btn svg{width:26px;height:26px;}
-  .tool-btn:hover{border-color:var(--accent);}
-  .tool-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
-  .tool-btn.active svg *{stroke:#fff !important;fill:#fff !important;}
+/* ===============================
+   Color Settings
+   =============================== */
 
-  /* Canvas area */
-  .canvas-wrap{
-    flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;position:relative;
-  }
-  .artboard-shell{position:relative;box-shadow:0 12px 40px rgba(0,0,0,.18);border-radius:4px;}
-  .artboard{display:block;background:var(--page-bg);border-radius:4px;}
-  .tool-hint{
-    position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
-    background:rgba(26,29,41,.82);color:#fff;font-size:12.5px;font-weight:600;
-    padding:7px 14px;border-radius:20px;white-space:nowrap;pointer-events:none;z-index:15;
-  }
+:root{
+  --accent:#3559E0;
+  --accent-dark:#233C99;
+  --accent-soft:#E4EAFF;
 
-  /* Right panel */
-  .right-panel{
-    position:absolute;top:16px;right:16px;bottom:16px;width:220px;z-index:25;
-    background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:14px;
-    padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.16);
-    display:flex;flex-direction:column;gap:14px;overflow-y:auto;
-    transform:translateX(250px);opacity:0;pointer-events:none;transition:all .18s ease;
-  }
-  .right-panel.open{transform:translateX(0);opacity:1;pointer-events:auto;}
-  .panel-title{font-size:15px;font-weight:800;background:#fff;border:1px solid var(--panel-border);border-radius:9px;padding:10px;text-align:center;cursor:pointer;}
-  .panel-title.on{background:var(--accent);color:#fff;border-color:var(--accent);}
-  .panel-hint{font-size:11px;color:var(--ink-soft);margin-top:-8px;line-height:1.4;}
-  .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-  .panel-btn{
-    background:#fff;border:1px solid var(--panel-border);border-radius:9px;padding:9px 4px;font-size:12.5px;
-    font-weight:700;cursor:pointer;color:var(--ink);
-  }
-  .panel-btn:hover{border-color:var(--accent);color:var(--accent-dark);}
-  .color-label{font-size:14px;font-weight:800;margin-top:2px;}
-  .slider-row{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;}
-  .slider-row span{width:14px;color:var(--ink-soft);}
-  .slider-row input[type=range]{flex:1;accent-color:var(--accent);}
-  .swatch{
-    width:100%;height:36px;border-radius:8px;border:1px solid var(--panel-border);margin-top:2px;
-  }
-  .delete-btn{
-    margin-top:auto;background:var(--danger-soft);color:var(--danger);border:1px solid transparent;
-    border-radius:9px;padding:10px;font-weight:800;font-size:13px;cursor:pointer;
-  }
-  .delete-btn:hover{background:var(--danger);color:#fff;}
+  --panel-bg:#F1F3F8;
+  --panel-border:#D8DCE6;
 
-  svg.artboard{cursor:default;}
-  .shape-el{cursor:move;}
-  .handle{fill:#fff;stroke:var(--accent);stroke-width:2;cursor:pointer;}
-  .sel-box{fill:none;stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 3;pointer-events:none;}
-  .shape-preview{fill:rgba(53,89,224,0.10);stroke:var(--accent);stroke-width:1.6;stroke-dasharray:6 4;pointer-events:none;}
+  --ink:#1A1D29;
+  --ink-soft:#6B7080;
 
-  ::-webkit-scrollbar{width:8px;height:8px;}
-  ::-webkit-scrollbar-thumb{background:#c3c8d4;border-radius:4px;}
+  --canvas-bg:#E7EAF1;
+  --page-bg:#FFFFFF;
+
+  --danger:#E0473E;
+  --danger-soft:#FCE4E2;
+
+  --ui-font:"KeiFont", sans-serif;
+}
+
+
+/* ===============================
+   Reset
+   =============================== */
+
+*{
+  box-sizing:border-box;
+}
+
+html,
+body{
+  height:100%;
+  margin:0;
+}
+
+body{
+  font-family:var(--ui-font);
+  color:var(--ink);
+
+  -webkit-user-select:none;
+  user-select:none;
+
+  overflow:hidden;
+}
+
+button,
+input,
+select,
+textarea{
+  font-family:var(--ui-font);
+}
+
+
+/* ===============================
+   App
+   =============================== */
+
+#app{
+  display:flex;
+  flex-direction:column;
+
+  height:100vh;
+
+  background:var(--canvas-bg);
+}
+
+
+/* ===============================
+   Top Bar
+   =============================== */
+
+.topbar{
+  height:58px;
+  flex:0 0 auto;
+
+  background:
+    linear-gradient(
+      180deg,
+      var(--accent) 0%,
+      var(--accent-dark) 100%
+    );
+
+  display:flex;
+  align-items:center;
+
+  gap:10px;
+  padding:0 14px;
+
+  box-shadow:0 2px 8px rgba(0,0,0,.18);
+
+  position:relative;
+  z-index:50;
+}
+
+
+/* Logo */
+
+.logo{
+  color:#fff;
+
+  font-family:var(--ui-font);
+  font-weight:800;
+  font-size:18px;
+
+  letter-spacing:.5px;
+
+  padding:6px 12px;
+
+  font-style:italic;
+}
+
+
+/* Top buttons */
+
+.pill-btn{
+  font-family:var(--ui-font);
+
+  background:#fff;
+  color:var(--ink);
+
+  border:none;
+  border-radius:9px;
+
+  padding:9px 16px;
+
+  font-size:14px;
+  font-weight:600;
+
+  cursor:pointer;
+
+  box-shadow:0 1px 2px rgba(0,0,0,.12);
+
+  transition:
+    transform .12s ease,
+    box-shadow .12s ease;
+}
+
+.pill-btn:hover{
+  transform:translateY(-1px);
+
+  box-shadow:
+    0 3px 8px rgba(0,0,0,.18);
+}
+
+.pill-btn:active{
+  transform:translateY(0);
+}
+
+
+/* ===============================
+   Dropdown
+   =============================== */
+
+.dropdown-wrap{
+  position:relative;
+}
+
+.dropdown{
+  position:absolute;
+
+  top:calc(100% + 8px);
+  left:0;
+
+  background:#fff;
+
+  border-radius:10px;
+
+  box-shadow:
+    0 10px 30px rgba(0,0,0,.22);
+
+  padding:6px;
+
+  min-width:200px;
+
+  display:flex;
+  flex-direction:column;
+
+  gap:2px;
+
+  z-index:60;
+}
+
+.dropdown button,
+.dropdown label{
+  font-family:var(--ui-font);
+
+  background:none;
+
+  border:none;
+
+  text-align:left;
+
+  padding:10px 12px;
+
+  border-radius:7px;
+
+  font-size:13.5px;
+  font-weight:600;
+
+  color:var(--ink);
+
+  cursor:pointer;
+
+  display:block;
+
+  width:100%;
+}
+
+.dropdown button:hover,
+.dropdown label:hover{
+  background:var(--accent-soft);
+}
+
+.dropdown select{
+  font-family:var(--ui-font);
+
+  width:100%;
+
+  padding:8px;
+
+  border-radius:7px;
+
+  border:
+    1px solid var(--panel-border);
+
+  font-size:13px;
+
+  margin-top:4px;
+}
+
+.dropdown .section-title{
+  font-family:var(--ui-font);
+
+  font-size:11px;
+
+  color:var(--ink-soft);
+
+  padding:6px 12px 0;
+
+  font-weight:700;
+
+  text-transform:uppercase;
+
+  letter-spacing:.4px;
+}
+
+
+/* ===============================
+   Filename Box
+   =============================== */
+
+.filename-box{
+  margin-left:auto;
+
+  display:flex;
+  align-items:center;
+
+  gap:6px;
+
+  background:#fff;
+
+  border-radius:9px;
+
+  padding:6px 10px 6px 14px;
+
+  box-shadow:
+    0 1px 2px rgba(0,0,0,.12);
+}
+
+.filename-box input{
+  font-family:var(--ui-font);
+
+  border:none;
+
+  outline:none;
+
+  font-weight:700;
+
+  font-size:14px;
+
+  width:130px;
+
+  color:var(--ink);
+
+  background:transparent;
+}
+
+
+/* Icon button */
+
+.icon-btn{
+  width:28px;
+  height:28px;
+
+  border-radius:6px;
+
+  border:none;
+
+  background:var(--accent-soft);
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  cursor:pointer;
+
+  color:var(--accent-dark);
+}
+
+.icon-btn:hover{
+  background:var(--accent);
+
+  color:#fff;
+}
+
+
+/* ===============================
+   Main Layout
+   =============================== */
+
+.main{
+  flex:1;
+
+  display:flex;
+
+  overflow:hidden;
+
+  position:relative;
+}
+
+
+/* ===============================
+   Left Tool Dock
+   =============================== */
+
+.dock-toggle{
+  position:absolute;
+
+  top:16px;
+  left:16px;
+
+  z-index:30;
+
+  width:40px;
+  height:40px;
+
+  border-radius:10px;
+
+  background:var(--ink);
+
+  color:#fff;
+
+  border:none;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  cursor:pointer;
+
+  font-family:var(--ui-font);
+  font-size:18px;
+
+  box-shadow:
+    0 4px 12px rgba(0,0,0,.25);
+
+  transition:
+    left .18s ease,
+    background .12s ease;
+}
+
+.dock-toggle:hover{
+  background:#000;
+}
+
+
+.toolpanel{
+  position:absolute;
+
+  top:16px;
+  left:16px;
+
+  z-index:25;
+
+  background:var(--panel-bg);
+
+  border:
+    1px solid var(--panel-border);
+
+  border-radius:14px;
+
+  padding:56px 12px 14px;
+
+  box-shadow:
+    0 8px 24px rgba(0,0,0,.16);
+
+  display:grid;
+
+  grid-template-columns:
+    1fr 1fr;
+
+  gap:8px;
+
+  width:172px;
+
+  transform:translateX(-220px);
+
+  opacity:0;
+
+  pointer-events:none;
+
+  transition:
+    all .18s ease;
+}
+
+.toolpanel.open{
+  transform:translateX(0);
+
+  opacity:1;
+
+  pointer-events:auto;
+}
+
+
+/* Tool Buttons */
+
+.tool-btn{
+  font-family:var(--ui-font);
+
+  background:#fff;
+
+  border:
+    1px solid var(--panel-border);
+
+  border-radius:10px;
+
+  padding:10px 4px 8px;
+
+  display:flex;
+  flex-direction:column;
+
+  align-items:center;
+
+  gap:4px;
+
+  cursor:pointer;
+
+  font-size:11.5px;
+
+  font-weight:600;
+
+  color:var(--ink);
+}
+
+.tool-btn svg{
+  width:26px;
+  height:26px;
+}
+
+.tool-btn:hover{
+  border-color:var(--accent);
+}
+
+.tool-btn.active{
+  background:var(--accent);
+
+  color:#fff;
+
+  border-color:var(--accent);
+}
+
+.tool-btn.active svg *{
+  stroke:#fff !important;
+
+  fill:#fff !important;
+}
+
+
+/* ===============================
+   Canvas
+   =============================== */
+
+.canvas-wrap{
+  flex:1;
+
+  display:flex;
+
+  align-items:center;
+  justify-content:center;
+
+  overflow:auto;
+
+  position:relative;
+}
+
+.artboard-shell{
+  position:relative;
+
+  box-shadow:
+    0 12px 40px rgba(0,0,0,.18);
+
+  border-radius:4px;
+}
+
+.artboard{
+  display:block;
+
+  background:var(--page-bg);
+
+  border-radius:4px;
+}
+
+
+/* Tool Hint */
+
+.tool-hint{
+  font-family:var(--ui-font);
+
+  position:absolute;
+
+  bottom:14px;
+
+  left:50%;
+
+  transform:
+    translateX(-50%);
+
+  background:
+    rgba(26,29,41,.82);
+
+  color:#fff;
+
+  font-size:12.5px;
+
+  font-weight:600;
+
+  padding:7px 14px;
+
+  border-radius:20px;
+
+  white-space:nowrap;
+
+  pointer-events:none;
+
+  z-index:15;
+}
+
+
+/* ===============================
+   Right Panel
+   =============================== */
+
+.right-panel{
+  position:absolute;
+
+  top:16px;
+  right:16px;
+  bottom:16px;
+
+  width:220px;
+
+  z-index:25;
+
+  background:var(--panel-bg);
+
+  border:
+    1px solid var(--panel-border);
+
+  border-radius:14px;
+
+  padding:16px;
+
+  box-shadow:
+    0 8px 24px rgba(0,0,0,.16);
+
+  display:flex;
+
+  flex-direction:column;
+
+  gap:14px;
+
+  overflow-y:auto;
+
+  transform:
+    translateX(250px);
+
+  opacity:0;
+
+  pointer-events:none;
+
+  transition:
+    all .18s ease;
+}
+
+.right-panel.open{
+  transform:
+    translateX(0);
+
+  opacity:1;
+
+  pointer-events:auto;
+}
+
+
+/* Panel Title */
+
+.panel-title{
+  font-family:var(--ui-font);
+
+  font-size:15px;
+
+  font-weight:800;
+
+  background:#fff;
+
+  border:
+    1px solid var(--panel-border);
+
+  border-radius:9px;
+
+  padding:10px;
+
+  text-align:center;
+
+  cursor:pointer;
+}
+
+.panel-title.on{
+  background:var(--accent);
+
+  color:#fff;
+
+  border-color:var(--accent);
+}
+
+
+.panel-hint{
+  font-family:var(--ui-font);
+
+  font-size:11px;
+
+  color:var(--ink-soft);
+
+  margin-top:-8px;
+
+  line-height:1.4;
+}
+
+
+/* Panel Buttons */
+
+.btn-row{
+  display:grid;
+
+  grid-template-columns:
+    1fr 1fr;
+
+  gap:8px;
+}
+
+.panel-btn{
+  font-family:var(--ui-font);
+
+  background:#fff;
+
+  border:
+    1px solid var(--panel-border);
+
+  border-radius:9px;
+
+  padding:9px 4px;
+
+  font-size:12.5px;
+
+  font-weight:700;
+
+  cursor:pointer;
+
+  color:var(--ink);
+}
+
+.panel-btn:hover{
+  border-color:var(--accent);
+
+  color:var(--accent-dark);
+}
+
+
+/* ===============================
+   Color Controls
+   =============================== */
+
+.color-label{
+  font-family:var(--ui-font);
+
+  font-size:14px;
+
+  font-weight:800;
+
+  margin-top:2px;
+}
+
+.slider-row{
+  display:flex;
+
+  align-items:center;
+
+  gap:8px;
+
+  font-family:var(--ui-font);
+
+  font-size:12px;
+
+  font-weight:700;
+}
+
+.slider-row span{
+  width:14px;
+
+  color:var(--ink-soft);
+}
+
+.slider-row input[type="range"]{
+  flex:1;
+
+  accent-color:var(--accent);
+}
+
+
+.swatch{
+  width:100%;
+
+  height:36px;
+
+  border-radius:8px;
+
+  border:
+    1px solid var(--panel-border);
+
+  margin-top:2px;
+}
+
+
+/* Delete */
+
+.delete-btn{
+  font-family:var(--ui-font);
+
+  margin-top:auto;
+
+  background:var(--danger-soft);
+
+  color:var(--danger);
+
+  border:
+    1px solid transparent;
+
+  border-radius:9px;
+
+  padding:10px;
+
+  font-weight:800;
+
+  font-size:13px;
+
+  cursor:pointer;
+}
+
+.delete-btn:hover{
+  background:var(--danger);
+
+  color:#fff;
+}
+
+
+/* ===============================
+   SVG
+   =============================== */
+
+svg.artboard{
+  cursor:default;
+}
+
+.shape-el{
+  cursor:move;
+}
+
+.handle{
+  fill:#fff;
+
+  stroke:var(--accent);
+
+  stroke-width:2;
+
+  cursor:pointer;
+}
+
+.sel-box{
+  fill:none;
+
+  stroke:var(--accent);
+
+  stroke-width:1.5;
+
+  stroke-dasharray:
+    4 3;
+
+  pointer-events:none;
+}
+
+.shape-preview{
+  fill:
+    rgba(53,89,224,.10);
+
+  stroke:
+    var(--accent);
+
+  stroke-width:1.6;
+
+  stroke-dasharray:
+    6 4;
+
+  pointer-events:none;
+}
+
+
+/* ===============================
+   Scrollbar
+   =============================== */
+
+::-webkit-scrollbar{
+  width:8px;
+  height:8px;
+}
+
+::-webkit-scrollbar-thumb{
+  background:#c3c8d4;
+
+  border-radius:4px;
+}
+
 </style>
 </head>
 <body>
