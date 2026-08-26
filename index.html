@@ -2,1003 +2,1062 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>UI's エディタ</title>
+<title>UI's Editor</title>
 <style>
   :root{
-    --header-bg:#659aff;
-    --select-blue:#0021ff;
-    --panel-bg:#fbfbfd;
-    --panel-border:#dfe3ea;
-    --canvas-bg:#eceef2;
-    --text:#20242c;
-    --muted:#767c8a;
+    --accent:#3559E0;
+    --accent-dark:#233C99;
+    --accent-soft:#E4EAFF;
+    --panel-bg:#F1F3F8;
+    --panel-border:#D8DCE6;
+    --ink:#1A1D29;
+    --ink-soft:#6B7080;
+    --canvas-bg:#E7EAF1;
+    --page-bg:#FFFFFF;
+    --danger:#E0473E;
+    --danger-soft:#FCE4E2;
   }
   *{box-sizing:border-box;}
-  html,body{
-    margin:0;padding:0;height:100%;
-    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Hiragino Sans",sans-serif;
-    color:var(--text);
-    -webkit-font-smoothing:antialiased;
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:"Hiragino Sans","Yu Gothic UI","Segoe UI",system-ui,sans-serif;
+    color:var(--ink);
+    -webkit-user-select:none;user-select:none;
     overflow:hidden;
-    background:var(--canvas-bg);
   }
-  button{font-family:inherit;cursor:pointer;}
+  #app{display:flex;flex-direction:column;height:100vh;background:var(--canvas-bg);}
 
-  /* ===== ヘッダー ===== */
+  /* ---------- Top bar ---------- */
   .topbar{
-    height:40px;
-    background:var(--header-bg);
-    display:flex;
-    align-items:center;
-    gap:8px;
-    padding:0 10px;
-    position:relative;
-    z-index:500;
-    flex:0 0 40px;
+    height:58px;flex:0 0 auto;
+    background:linear-gradient(180deg,var(--accent) 0%, var(--accent-dark) 100%);
+    display:flex;align-items:center;gap:10px;padding:0 14px;
+    box-shadow:0 2px 8px rgba(0,0,0,.18);
+    position:relative;z-index:50;
   }
-  .topbar button{
-    background:#ffffff;
-    border:none;
-    border-radius:5px;
-    height:27px;
-    padding:0 14px;
-    font-size:13px;
-    font-weight:600;
-    color:#1c2333;
-    box-shadow:0 1px 0 rgba(0,0,0,0.12);
-    transition:transform .08s ease, box-shadow .08s ease;
-    white-space:nowrap;
+  .logo{
+    color:#fff;font-weight:800;font-size:18px;letter-spacing:.5px;
+    padding:6px 12px;font-style:italic;
   }
-  .topbar button:hover{transform:translateY(-1px);box-shadow:0 3px 6px rgba(0,0,0,0.18);}
-  .topbar button:active{transform:translateY(0);}
-  .topbar .logo-btn{font-style:italic;font-weight:800;letter-spacing:.3px;}
-  .file-menu-wrap{position:relative;}
+  .pill-btn{
+    background:#fff;color:var(--ink);border:none;border-radius:9px;
+    padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer;
+    box-shadow:0 1px 2px rgba(0,0,0,.12);
+    transition:transform .12s ease, box-shadow .12s ease;
+  }
+  .pill-btn:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,0,0,.18);}
+  .pill-btn:active{transform:translateY(0);}
+  .dropdown-wrap{position:relative;}
   .dropdown{
-    position:absolute;top:32px;left:0;
-    background:#ffffff;border:1px solid var(--panel-border);
-    border-radius:8px;box-shadow:0 8px 24px rgba(20,30,60,0.18);
-    padding:6px;display:flex;flex-direction:column;gap:2px;min-width:190px;
+    position:absolute;top:calc(100% + 8px);left:0;background:#fff;border-radius:10px;
+    box-shadow:0 10px 30px rgba(0,0,0,.22);padding:6px;min-width:200px;
+    display:flex;flex-direction:column;gap:2px;z-index:60;
   }
-  .dropdown.hidden{display:none;}
-  .dropdown button{
-    width:100%;text-align:left;background:none;box-shadow:none;
-    border-radius:6px;height:34px;padding:0 10px;font-weight:500;
+  .dropdown button, .dropdown label{
+    background:none;border:none;text-align:left;padding:10px 12px;border-radius:7px;
+    font-size:13.5px;font-weight:600;color:var(--ink);cursor:pointer;display:block;width:100%;
   }
-  .dropdown button:hover{background:#eef2ff;transform:none;box-shadow:none;}
-  .topbar .spacer{flex:1;}
+  .dropdown button:hover, .dropdown label:hover{background:var(--accent-soft);}
+  .dropdown select{
+    width:100%;padding:8px;border-radius:7px;border:1px solid var(--panel-border);font-size:13px;margin-top:4px;
+  }
+  .dropdown .section-title{font-size:11px;color:var(--ink-soft);padding:6px 12px 0;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
 
-  /* ===== ワークスペース ===== */
-  .workspace{display:flex;flex:1 1 auto;min-height:0;}
-  .side-panel{
-    width:172px;flex:0 0 172px;background:var(--panel-bg);
-    border-right:1px solid var(--panel-border);padding:14px 12px;overflow-y:auto;
+  .filename-box{
+    margin-left:auto;display:flex;align-items:center;gap:6px;background:#fff;border-radius:9px;
+    padding:6px 10px 6px 14px;box-shadow:0 1px 2px rgba(0,0,0,.12);
   }
-  .side-panel.right{border-right:none;border-left:1px solid var(--panel-border);}
-  .panel-block{
-    border:1px solid var(--panel-border);border-radius:10px;padding:10px;
-    margin-bottom:14px;background:#ffffff;
+  .filename-box input{
+    border:none;outline:none;font-weight:700;font-size:14px;font-family:inherit;width:130px;color:var(--ink);
+    background:transparent;
   }
-  .panel-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px;letter-spacing:.03em;}
-  .hint-text{font-size:11px;color:var(--muted);line-height:1.5;}
+  .icon-btn{
+    width:28px;height:28px;border-radius:6px;border:none;background:var(--accent-soft);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--accent-dark);
+  }
+  .icon-btn:hover{background:var(--accent);color:#fff;}
+
+  /* ---------- Main layout ---------- */
+  .main{flex:1;display:flex;overflow:hidden;position:relative;}
+
+  /* Left tool dock */
+  .dock-toggle{
+    position:absolute;top:16px;left:16px;z-index:30;
+    width:40px;height:40px;border-radius:10px;background:var(--ink);color:#fff;border:none;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;
+    box-shadow:0 4px 12px rgba(0,0,0,.25);transition:left .18s ease;
+  }
+  .dock-toggle:hover{background:#000;}
+  .toolpanel{
+    position:absolute;top:16px;left:16px;z-index:25;
+    background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:14px;
+    padding:56px 12px 14px;box-shadow:0 8px 24px rgba(0,0,0,.16);
+    display:grid;grid-template-columns:1fr 1fr;gap:8px;width:172px;
+    transform:translateX(-220px);opacity:0;pointer-events:none;transition:all .18s ease;
+  }
+  .toolpanel.open{transform:translateX(0);opacity:1;pointer-events:auto;}
   .tool-btn{
-    display:flex;align-items:center;gap:8px;width:100%;
-    border:1px solid var(--panel-border);background:#fff;border-radius:7px;
-    padding:8px 10px;margin-bottom:6px;font-size:13px;font-weight:500;color:var(--text);
+    background:#fff;border:1px solid var(--panel-border);border-radius:10px;padding:10px 4px 8px;
+    display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;font-size:11.5px;font-weight:600;
+    color:var(--ink);
   }
-  .tool-btn:hover{border-color:var(--header-bg);background:#f2f6ff;}
-  .tool-btn:last-child{margin-bottom:0;}
-  .tool-icon{width:18px;height:18px;flex:0 0 18px;border:2px solid #444;display:inline-block;}
-  .tool-icon.circle{border-radius:50%;}
-  .tool-icon.triangle{
-    width:0;height:0;border:none;
-    border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:16px solid #444;
-  }
-  select, .num-input{
-    width:100%;border:1px solid var(--panel-border);border-radius:6px;
-    padding:6px 8px;font-size:13px;font-family:inherit;
-  }
-  .size-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
-  .size-row:last-child{margin-bottom:0;}
-  .size-row label{font-size:12px;color:var(--muted);width:32px;flex:0 0 32px;}
+  .tool-btn svg{width:26px;height:26px;}
+  .tool-btn:hover{border-color:var(--accent);}
+  .tool-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .tool-btn.active svg *{stroke:#fff !important;fill:#fff !important;}
 
-  /* ===== キャンバス ===== */
+  /* Canvas area */
   .canvas-wrap{
-    flex:1 1 auto;display:flex;align-items:center;justify-content:center;
-    overflow:auto;padding:24px;position:relative;
+    flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;position:relative;
   }
-  #canvas{
-    position:relative;background:#ffffff;
-    box-shadow:0 2px 18px rgba(30,40,70,0.12);
-    background-image:
-      linear-gradient(45deg,#f4f5f8 25%,transparent 25%),
-      linear-gradient(-45deg,#f4f5f8 25%,transparent 25%),
-      linear-gradient(45deg,transparent 75%,#f4f5f8 75%),
-      linear-gradient(-45deg,transparent 75%,#f4f5f8 75%);
-    background-size:20px 20px;
-    background-position:0 0,0 10px,10px -10px,-10px 0px;
-  }
-  .obj{position:absolute;user-select:none;}
-  .obj img, .obj .shape-fill{width:100%;height:100%;display:block;pointer-events:none;}
-  .obj img{object-fit:contain;}
-  .obj .shape-fill.rect{background:#8fb2ff;}
-  .obj .shape-fill.circle{background:#8fb2ff;border-radius:50%;}
-  .obj .shape-fill.triangle{
-    width:100%;height:100%;background:transparent;
-    clip-path:polygon(50% 0%, 0% 100%, 100% 100%);background-color:#8fb2ff;
-  }
-  .obj .tint{position:absolute;inset:0;pointer-events:none;mix-blend-mode:multiply;}
-  .obj.selected{outline:2px solid var(--select-blue);}
-  .obj.multi-selected{outline:2px dashed var(--select-blue);}
-  .handle{
-    position:absolute;width:10px;height:10px;background:var(--select-blue);
-    border:1px solid #ffffff;z-index:10;
-  }
-  .handle.nw{top:-6px;left:-6px;cursor:nwse-resize;}
-  .handle.ne{top:-6px;right:-6px;cursor:nesw-resize;}
-  .handle.sw{bottom:-6px;left:-6px;cursor:nesw-resize;}
-  .handle.se{bottom:-6px;right:-6px;cursor:nwse-resize;}
-
-  .rotate-handle{
-    position:absolute;width:14px;height:14px;border-radius:50%;
-    background:#ffffff;border:2px solid var(--select-blue);
-    transform:translate(-50%,-50%);cursor:grab;z-index:20;
-  }
-  .rotate-handle:active{cursor:grabbing;}
-  .rotate-line{
-    position:absolute;background:var(--select-blue);width:1px;
-    transform-origin:top center;z-index:9;pointer-events:none;
+  .artboard-shell{position:relative;box-shadow:0 12px 40px rgba(0,0,0,.18);border-radius:4px;}
+  .artboard{display:block;background:var(--page-bg);border-radius:4px;}
+  .tool-hint{
+    position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
+    background:rgba(26,29,41,.82);color:#fff;font-size:12.5px;font-weight:600;
+    padding:7px 14px;border-radius:20px;white-space:nowrap;pointer-events:none;z-index:15;
   }
 
-  /* ===== 下部メニュー ===== */
-  .bottom-menu{
-    flex:0 0 auto;min-height:132px;background:#ffffff;
-    border-top:1px solid var(--panel-border);display:flex;align-items:stretch;
-    gap:14px;padding:12px 16px;box-shadow:0 -4px 16px rgba(20,30,60,0.08);z-index:400;
+  /* Right panel */
+  .right-panel{
+    position:absolute;top:16px;right:16px;bottom:16px;width:220px;z-index:25;
+    background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:14px;
+    padding:16px;box-shadow:0 8px 24px rgba(0,0,0,.16);
+    display:flex;flex-direction:column;gap:14px;overflow-y:auto;
+    transform:translateX(250px);opacity:0;pointer-events:none;transition:all .18s ease;
   }
-  .bottom-menu.hidden{display:none;}
-  .menu-block{
-    border:1px solid var(--panel-border);border-radius:10px;padding:10px 12px;
-    background:#fbfbfd;transition:opacity .15s ease;
+  .right-panel.open{transform:translateX(0);opacity:1;pointer-events:auto;}
+  .panel-title{font-size:15px;font-weight:800;background:#fff;border:1px solid var(--panel-border);border-radius:9px;padding:10px;text-align:center;cursor:pointer;}
+  .panel-title.on{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .panel-hint{font-size:11px;color:var(--ink-soft);margin-top:-8px;line-height:1.4;}
+  .btn-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .panel-btn{
+    background:#fff;border:1px solid var(--panel-border);border-radius:9px;padding:9px 4px;font-size:12.5px;
+    font-weight:700;cursor:pointer;color:var(--ink);
   }
-  .menu-block.disabled{opacity:.35;pointer-events:none;}
-  .block-title{font-size:12px;font-weight:700;color:var(--muted);margin-bottom:6px;}
-  .color-block{width:260px;flex:0 0 260px;display:flex;flex-direction:column;}
-  .slider-row{display:flex;align-items:center;gap:8px;margin:3px 0;}
-  .slider-row label{width:16px;flex:0 0 16px;font-size:12px;font-weight:700;color:var(--text);}
-  .slider-row input[type=range]{flex:1;accent-color:var(--select-blue);}
-  .slider-row .val{width:34px;flex:0 0 34px;font-size:11px;color:var(--muted);text-align:right;}
-  .layer-block{
-    width:150px;flex:0 0 150px;display:flex;flex-direction:column;justify-content:center;gap:6px;
+  .panel-btn:hover{border-color:var(--accent);color:var(--accent-dark);}
+  .color-label{font-size:14px;font-weight:800;margin-top:2px;}
+  .slider-row{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;}
+  .slider-row span{width:14px;color:var(--ink-soft);}
+  .slider-row input[type=range]{flex:1;accent-color:var(--accent);}
+  .swatch{
+    width:100%;height:36px;border-radius:8px;border:1px solid var(--panel-border);margin-top:2px;
   }
-  .layer-block button, .action-block button{
-    background:#ffffff;border:1px solid var(--panel-border);border-radius:7px;
-    padding:7px 0;font-size:12.5px;font-weight:600;
+  .delete-btn{
+    margin-top:auto;background:var(--danger-soft);color:var(--danger);border:1px solid transparent;
+    border-radius:9px;padding:10px;font-weight:800;font-size:13px;cursor:pointer;
   }
-  .layer-block button:hover, .action-block button:hover:not(:disabled){border-color:var(--header-bg);background:#f2f6ff;}
-  .transform-block{
-    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
-    width:160px;flex:0 0 160px;
-  }
-  .transform-block button{
-    background:var(--header-bg);color:#fff;border:none;border-radius:8px;
-    padding:12px 18px;font-size:13px;font-weight:700;box-shadow:0 2px 6px rgba(101,154,255,0.4);
-  }
-  .transform-block button:hover{filter:brightness(1.06);}
-  .transform-hint{font-size:11px;color:var(--muted);text-align:center;}
-  .action-block{
-    width:150px;flex:0 0 150px;display:flex;flex-direction:column;justify-content:center;gap:6px;
-  }
-  .action-block button:disabled{opacity:.35;cursor:default;}
-  .action-block button.danger{color:#c62828;border-color:#f0b8b8;}
-  .action-block button.danger:hover:not(:disabled){background:#fff2f2;}
-  .spare-block{flex:1;}
+  .delete-btn:hover{background:var(--danger);color:#fff;}
 
-  .loading-mask{
-    position:fixed;inset:0;background:rgba(255,255,255,0.55);
-    display:flex;align-items:center;justify-content:center;z-index:1500;
-    font-size:13px;color:var(--muted);font-weight:600;
-  }
-  .loading-mask.hidden{display:none;}
-  .toast{
-    position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(20px);
-    background:#1c2333;color:#fff;padding:11px 20px;border-radius:8px;font-size:13px;
-    box-shadow:0 8px 24px rgba(0,0,0,0.3);opacity:0;
-    transition:opacity .25s ease, transform .25s ease;z-index:2000;pointer-events:none;
-  }
-  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  svg.artboard{cursor:default;}
+  .shape-el{cursor:move;}
+  .handle{fill:#fff;stroke:var(--accent);stroke-width:2;cursor:pointer;}
+  .sel-box{fill:none;stroke:var(--accent);stroke-width:1.5;stroke-dasharray:4 3;pointer-events:none;}
+  .shape-preview{fill:rgba(53,89,224,0.10);stroke:var(--accent);stroke-width:1.6;stroke-dasharray:6 4;pointer-events:none;}
+
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-thumb{background:#c3c8d4;border-radius:4px;}
 </style>
 </head>
 <body>
+<div id="app">
 
-  <header class="topbar">
-    <button class="logo-btn" id="btnHome" title="ホームへ戻る">UI's</button>
-    <button id="btnNew">新規作成</button>
-    <div class="file-menu-wrap">
-      <button id="btnFile">ファイル ▾</button>
-      <div class="dropdown hidden" id="fileMenu">
-        <button data-action="savezip">ZIPファイルで保存</button>
-        <button data-action="savepdf">PDFファイルで保存</button>
-        <button data-action="replacezip">ZIPファイルで置き換える</button>
+  <div class="topbar">
+    <div class="logo">UI's</div>
+
+    <div class="dropdown-wrap" id="fileWrap">
+      <button class="pill-btn" id="fileBtn" type="button">ファイル</button>
+      <div class="dropdown" id="fileMenu" style="display:none;">
+        <button id="pdfSaveBtn" type="button">PDF保存</button>
+        <button id="zipSaveBtn" type="button">zipで保存</button>
+        <label id="zipLoadLabel">zipを読み込み
+          <input type="file" id="zipLoadInput" accept=".zip" style="display:none;">
+        </label>
       </div>
     </div>
-    <button id="btnFeedback">フィードバック</button>
-    <div class="spacer"></div>
-  </header>
 
-  <div class="workspace">
-    <aside class="side-panel left">
-      <div class="panel-block">
-        <div class="panel-title">図形を追加</div>
-        <button class="tool-btn" data-shape="rect"><span class="tool-icon rect"></span>四角形</button>
-        <button class="tool-btn" data-shape="triangle"><span class="tool-icon triangle"></span>三角形</button>
-        <button class="tool-btn" data-shape="circle"><span class="tool-icon circle"></span>円</button>
-      </div>
-      <div class="panel-block">
-        <div class="panel-title">画像</div>
-        <button class="tool-btn" id="btnAddImage">＋ 画像を追加</button>
-        <input type="file" id="imageInput" accept="image/*" hidden>
-      </div>
-      <div class="panel-block">
-        <div class="panel-title">操作のヒント</div>
-        <div class="hint-text">
-          ・部品クリックで選択<br>
-          ・Shift+クリックで複数選択<br>
-          ・選択枠上部の丸をドラッグで回転<br>
-          ・Deleteキーで削除
-        </div>
-      </div>
-    </aside>
+    <button class="pill-btn" id="newBtn" type="button">新規</button>
 
-    <main class="canvas-wrap">
-      <div id="canvas" style="width:420px;height:280px;"></div>
-    </main>
-
-    <aside class="side-panel right">
-      <div class="panel-block">
-        <div class="panel-title">デフォルトの機種</div>
+    <div class="dropdown-wrap" id="settingsWrap">
+      <button class="pill-btn" id="settingsBtn" type="button">設定</button>
+      <div class="dropdown" id="settingsMenu" style="display:none;">
+        <div class="section-title">ベース機種選択</div>
         <select id="deviceSelect">
-          <option value="420x280">標準キャンバス</option>
-          <option value="375x667">iPhone (縦)</option>
-          <option value="768x1024">iPad (縦)</option>
-          <option value="1080x1080">Instagram 投稿</option>
-          <option value="1200x630">OGP画像</option>
-          <option value="custom">カスタム</option>
+          <option value="none">選択しない</option>
+          <option value="iphone15">iPhone 15 (390×844)</option>
+          <option value="ipadair">iPad Air (600×800)</option>
+          <option value="mbp12">MacBook Pro 12 (900×560)</option>
+          <option value="mbp14">MacBook Pro 14 (960×600)</option>
+          <option value="fhd">Full HD Desktop (960×540)</option>
         </select>
       </div>
-      <div class="panel-block">
-        <div class="panel-title">サイズ</div>
-        <div class="size-row"><label>幅</label><input type="number" class="num-input" id="canvasW" value="420" min="40" max="4000"></div>
-        <div class="size-row"><label>高さ</label><input type="number" class="num-input" id="canvasH" value="280" min="40" max="4000"></div>
+    </div>
+
+    <div class="filename-box">
+      <input type="text" id="filenameInput" value="untitled" disabled>
+      <button class="icon-btn" id="renameBtn" title="名前を変更" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 21l3.6-.9L20 6.7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0L2.9 16.4 2 21z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="main">
+    <button class="dock-toggle" id="dockToggle" type="button">→</button>
+    <div class="toolpanel" id="toolPanel">
+      <button class="dock-toggle" id="dockCloseInner" type="button" style="position:static;width:32px;height:32px;grid-column:1/3;justify-self:start;margin-bottom:2px;">↤</button>
+
+      <div class="tool-btn" data-tool="select">
+        <svg viewBox="0 0 24 24"><path d="M5 3l14 6-6 2-2 6-6-14z" fill="none" stroke="#1A1D29" stroke-width="2" stroke-linejoin="round"/></svg>
+        選択
       </div>
-    </aside>
+      <div class="tool-btn" data-tool="rect">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" fill="none" stroke="#1A1D29" stroke-width="2"/></svg>
+        四角形
+      </div>
+      <div class="tool-btn" data-tool="triangle">
+        <svg viewBox="0 0 24 24"><polygon points="12,3 21,21 3,21" fill="none" stroke="#1A1D29" stroke-width="2"/></svg>
+        三角形
+      </div>
+      <div class="tool-btn" data-tool="circle">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="#1A1D29" stroke-width="2"/></svg>
+        円
+      </div>
+      <div class="tool-btn" data-tool="text">
+        <svg viewBox="0 0 24 24"><text x="6" y="18" font-size="18" font-weight="700" fill="#1A1D29">T</text></svg>
+        テキスト
+      </div>
+      <div class="tool-btn" data-tool="pen">
+        <svg viewBox="0 0 24 24"><path d="M4 20l1-4 11-11 3 3-11 11z" fill="none" stroke="#1A1D29" stroke-width="2" stroke-linejoin="round"/></svg>
+        ペン
+      </div>
+      <div class="tool-btn" data-tool="eraser">
+        <svg viewBox="0 0 24 24"><rect x="4" y="9" width="16" height="10" fill="none" stroke="#1A1D29" stroke-width="2"/></svg>
+        消しゴム
+      </div>
+    </div>
+
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="artboard-shell" id="artboardShell">
+        <svg class="artboard" id="artboard" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="tool-hint" id="toolHint"></div>
+    </div>
+
+    <div class="right-panel" id="rightPanel">
+      <div class="panel-title" id="transformToggle">変形させる</div>
+      <div class="panel-hint" id="transformHint"></div>
+      <div class="btn-row">
+        <button class="panel-btn" id="frontBtn" type="button">前面</button>
+        <button class="panel-btn" id="backBtn" type="button">背面</button>
+        <button class="panel-btn" id="frontMostBtn" type="button">最前面</button>
+        <button class="panel-btn" id="backMostBtn" type="button">最背面</button>
+      </div>
+      <div class="color-label">色</div>
+      <div class="swatch" id="colorSwatch"></div>
+      <div class="slider-row"><span>R</span><input type="range" id="rSlider" min="0" max="255"></div>
+      <div class="slider-row"><span>G</span><input type="range" id="gSlider" min="0" max="255"></div>
+      <div class="slider-row"><span>B</span><input type="range" id="bSlider" min="0" max="255"></div>
+      <div class="slider-row"><span>A</span><input type="range" id="aSlider" min="0" max="100"></div>
+      <button class="delete-btn" id="deleteBtn" type="button">この図形を削除</button>
+    </div>
   </div>
+</div>
 
-  <div class="bottom-menu hidden" id="bottomMenu">
-    <div class="menu-block color-block" id="colorBlock">
-      <div class="block-title">色</div>
-      <div class="slider-row"><label>R</label><input type="range" id="sliderR" min="0" max="255" value="255"><span class="val" id="valR">255</span></div>
-      <div class="slider-row"><label>G</label><input type="range" id="sliderG" min="0" max="255" value="255"><span class="val" id="valG">255</span></div>
-      <div class="slider-row"><label>B</label><input type="range" id="sliderB" min="0" max="255" value="255"><span class="val" id="valB">255</span></div>
-      <div class="slider-row"><label>A</label><input type="range" id="sliderA" min="0" max="1" step="0.01" value="1"><span class="val" id="valA">1.00</span></div>
-    </div>
-    <div class="menu-block layer-block" id="layerBlock">
-      <button data-layer="front">前面</button>
-      <button data-layer="back">背面</button>
-      <button data-layer="front-most">最前面</button>
-      <button data-layer="back-most">最背面</button>
-    </div>
-    <div class="menu-block transform-block" id="transformBlock">
-      <button id="btnFlip">左右反転</button>
-      <div class="transform-hint">選択枠上部の◯を<br>ドラッグして回転</div>
-    </div>
-    <div class="menu-block action-block">
-      <button id="btnCombine">部品を結合</button>
-      <button id="btnDecompose">部品を分解</button>
-      <button class="danger" id="btnDelete">削除</button>
-    </div>
-    <div class="spare-block"></div>
-  </div>
-
-  <input type="file" id="zipInput" accept=".zip" hidden>
-
-  <div class="loading-mask hidden" id="loadingMask">書き出し中…</div>
-  <div class="toast" id="toast"></div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
-(function(){
-  "use strict";
+const SVG_NS = "http://www.w3.org/2000/svg";
 
-  /* ---------- 初期サンプル画像（外部依存なしのSVG） ---------- */
-  const SAMPLE_IMAGE = "data:image/svg+xml;utf8," + encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" width="300" height="200">'+
-    '<rect width="300" height="200" fill="#cfe0ff"/>'+
-    '<rect x="8" y="8" width="284" height="184" fill="none" stroke="#659aff" stroke-width="3" stroke-dasharray="6 6"/>'+
-    '<text x="150" y="105" font-size="20" font-family="sans-serif" fill="#33415c" text-anchor="middle">サンプル画像</text>'+
-    '</svg>'
-  );
+/* ================= State ================= */
+let shapes = [];
+let idCounter = 0;
+let selectedId = null;
+let currentTool = "select";
+let transformMode = true;
+let filename = "untitled";
 
-  /* ---------- 状態 ---------- */
-  let objects = [];       // トップレベルの部品（image / shape / group）
-  let selectedIds = [];   // 選択中の id 一覧
-  let uid = 1;
-  let drag = null;        // ドラッグ／リサイズ／回転 中の情報
+let canvas = { w: 900, h: 600 };
 
-  const canvas = document.getElementById('canvas');
-  const bottomMenu = document.getElementById('bottomMenu');
-  const colorBlock = document.getElementById('colorBlock');
-  const layerBlock = document.getElementById('layerBlock');
-  const transformBlock = document.getElementById('transformBlock');
-  const canvasW = document.getElementById('canvasW');
-  const canvasH = document.getElementById('canvasH');
-  const deviceSelect = document.getElementById('deviceSelect');
+const DEVICE_PRESETS = {
+  none:    null,
+  iphone15:{w:390,h:844},
+  ipadair: {w:600,h:800},
+  mbp12:   {w:900,h:560},
+  mbp14:   {w:960,h:600},
+  fhd:     {w:960,h:540},
+};
 
-  function addInitialImage(){
-    objects.push({
-      id: uid++, type:'image', src: SAMPLE_IMAGE,
-      x:60, y:40, w:300, h:200, rot:0, flip:false,
-      color:{r:255,g:255,b:255,a:1}
-    });
-  }
-  addInitialImage();
+const DEFAULT_SHAPE_COLOR = {r:76,g:111,b:255,a:1};
+const DEFAULT_TEXT_COLOR  = {r:26,g:29,b:41,a:1};
+const DEFAULT_PEN_COLOR   = {r:26,g:29,b:41,a:1};
 
-  function getObj(id){ return objects.find(o=>o.id===id); }
-  function nextUid(){ return uid++; }
+const POINT_TYPES = ['rect','triangle','path']; // shapes represented as an editable points array
 
-  /* ---------- DOM 生成 ---------- */
-  function buildObjEl(obj, withHandles){
-    const el = document.createElement('div');
-    const isSel = selectedIds.includes(obj.id);
-    el.className = 'obj' + (withHandles ? ' selected' : (isSel ? ' multi-selected' : ''));
-    el.style.left = obj.x+'px';
-    el.style.top = obj.y+'px';
-    el.style.width = obj.w+'px';
-    el.style.height = obj.h+'px';
-    el.style.transform = `rotate(${obj.rot}deg) scaleX(${obj.flip?-1:1})`;
-    el.dataset.id = obj.id;
+/* ================= DOM refs ================= */
+const artboard = document.getElementById('artboard');
+const artboardShell = document.getElementById('artboardShell');
+const dockToggle = document.getElementById('dockToggle');
+const dockCloseInner = document.getElementById('dockCloseInner');
+const toolPanel = document.getElementById('toolPanel');
+const rightPanel = document.getElementById('rightPanel');
+const filenameInput = document.getElementById('filenameInput');
+const renameBtn = document.getElementById('renameBtn');
+const toolHint = document.getElementById('toolHint');
+const transformHint = document.getElementById('transformHint');
 
-    if(obj.type==='image'){
-      const img = document.createElement('img');
-      img.src = obj.src;
-      img.draggable = false;
-      img.style.opacity = obj.color.a;
-      el.appendChild(img);
-      const tint = document.createElement('div');
-      tint.className = 'tint';
-      tint.style.background = `rgba(${obj.color.r},${obj.color.g},${obj.color.b},${obj.color.a*0.45})`;
-      el.appendChild(tint);
-    } else if(obj.type==='shape'){
-      const fill = document.createElement('div');
-      fill.className = 'shape-fill ' + obj.shapeType;
-      fill.style.background = `rgba(${obj.color.r},${obj.color.g},${obj.color.b},${obj.color.a})`;
-      el.appendChild(fill);
-    } else if(obj.type==='group'){
-      obj.children.forEach(child=>{
-        el.appendChild(buildObjEl(child, false));
+/* ================= Utility ================= */
+function uid(){ return ++idCounter; }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function rgba(c){ return `rgba(${c.r},${c.g},${c.b},${c.a})`; }
+
+function pathBBox(points){
+  const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  return {x:minX, y:minY, w:Math.max(maxX-minX,2), h:Math.max(maxY-minY,2)};
+}
+function getBBox(shape){
+  if(POINT_TYPES.includes(shape.type)) return pathBBox(shape.points);
+  return {x:shape.x, y:shape.y, w:shape.w, h:shape.h};
+}
+function getSelected(){ return shapes.find(s=>s.id===selectedId); }
+
+/* ================= Canvas sizing ================= */
+function applyCanvasSize(){
+  artboard.setAttribute('width', canvas.w);
+  artboard.setAttribute('height', canvas.h);
+  artboard.setAttribute('viewBox', `0 0 ${canvas.w} ${canvas.h}`);
+  artboardShell.style.width = canvas.w+'px';
+  artboardShell.style.height = canvas.h+'px';
+}
+
+/* ================= Rendering ================= */
+function render(){
+  artboard.innerHTML = '';
+
+  const bg = document.createElementNS(SVG_NS,'rect');
+  bg.setAttribute('x',0); bg.setAttribute('y',0);
+  bg.setAttribute('width',canvas.w); bg.setAttribute('height',canvas.h);
+  bg.setAttribute('fill', '#ffffff');
+  bg.dataset.bg = "1";
+  artboard.appendChild(bg);
+
+  shapes.forEach(shape=>{
+    let el;
+    const c = shape.color;
+    if(shape.type==='rect' || shape.type==='triangle'){
+      el = document.createElementNS(SVG_NS,'polygon');
+      el.setAttribute('points', shape.points.map(p=>`${p.x},${p.y}`).join(' '));
+      el.setAttribute('fill', rgba(c));
+    } else if(shape.type==='circle'){
+      el = document.createElementNS(SVG_NS,'ellipse');
+      el.setAttribute('cx', shape.x+shape.w/2); el.setAttribute('cy', shape.y+shape.h/2);
+      el.setAttribute('rx', shape.w/2); el.setAttribute('ry', shape.h/2);
+      el.setAttribute('fill', rgba(c));
+    } else if(shape.type==='text'){
+      el = document.createElementNS(SVG_NS,'text');
+      el.setAttribute('x', shape.x); el.setAttribute('y', shape.y);
+      el.setAttribute('font-size', Math.max(10, shape.h*0.6));
+      el.setAttribute('font-weight', '700');
+      el.setAttribute('dominant-baseline','hanging');
+      el.setAttribute('fill', rgba(c));
+      el.textContent = shape.text;
+    } else if(shape.type==='path'){
+      el = document.createElementNS(SVG_NS,'path');
+      let d = '';
+      shape.points.forEach((p,i)=>{ d += (i===0?'M':'L') + p.x + ' ' + p.y + ' '; });
+      el.setAttribute('d', d);
+      el.setAttribute('fill','none');
+      el.setAttribute('stroke', rgba(c));
+      el.setAttribute('stroke-width', 4);
+      el.setAttribute('stroke-linecap','round');
+      el.setAttribute('stroke-linejoin','round');
+    }
+    el.classList.add('shape-el');
+    el.dataset.id = shape.id;
+    el.addEventListener('pointerdown', (e)=>onShapePointerDown(e, shape));
+    if(shape.type==='text'){
+      el.addEventListener('dblclick', (e)=>{
+        e.stopPropagation();
+        const val = prompt('テキストを編集', shape.text);
+        if(val !== null){ shape.text = val || ' '; render(); }
       });
     }
-
-    if(withHandles && obj.type!=='group'){
-      ['nw','ne','sw','se'].forEach(pos=>{
-        const h = document.createElement('div');
-        h.className = 'handle '+pos;
-        h.dataset.handle = pos;
-        el.appendChild(h);
-      });
-    }
-    return el;
-  }
-
-  function addRotateHandle(obj){
-    const cx = obj.x + obj.w/2;
-    const cy = obj.y + obj.h/2;
-    const distance = obj.h/2 + 30;
-    const rad = obj.rot * Math.PI/180;
-    const offX = 0, offY = -distance;
-    const rx = offX*Math.cos(rad) - offY*Math.sin(rad);
-    const ry = offX*Math.sin(rad) + offY*Math.cos(rad);
-    const hx = cx + rx, hy = cy + ry;
-
-    const line = document.createElement('div');
-    line.className = 'rotate-line';
-    line.style.left = cx+'px';
-    line.style.top = (cy - obj.h/2 - distance)+'px';
-    line.style.height = (distance - obj.h/2)+'px';
-    line.style.transform = `rotate(${obj.rot}deg)`;
-    canvas.appendChild(line);
-
-    const handle = document.createElement('div');
-    handle.className = 'rotate-handle';
-    handle.style.left = hx+'px';
-    handle.style.top = hy+'px';
-    handle.dataset.id = obj.id;
-    canvas.appendChild(handle);
-  }
-
-  function render(){
-    canvas.innerHTML = '';
-    objects.forEach(obj=>{
-      const withHandles = selectedIds.length===1 && selectedIds[0]===obj.id;
-      canvas.appendChild(buildObjEl(obj, withHandles));
-    });
-    if(selectedIds.length===1){
-      const obj = getObj(selectedIds[0]);
-      if(obj) addRotateHandle(obj);
-    }
-    updateBottomMenu();
-  }
-
-  function updateBottomMenu(){
-    const count = selectedIds.length;
-    bottomMenu.classList.toggle('hidden', count===0);
-    if(count===0) return;
-    const single = count===1 ? getObj(selectedIds[0]) : null;
-    const isGroup = !!(single && single.type==='group');
-
-    colorBlock.classList.toggle('disabled', count!==1 || isGroup);
-    layerBlock.classList.toggle('disabled', count!==1);
-    transformBlock.classList.toggle('disabled', count!==1);
-    document.getElementById('btnCombine').disabled = count<2;
-    document.getElementById('btnDecompose').disabled = !(count===1 && isGroup);
-    document.getElementById('btnDelete').disabled = count===0;
-
-    if(single && !isGroup) syncColorSliders(single);
-  }
-
-  /* ---------- 選択・トップレベル要素の特定 ---------- */
-  function findTopObjEl(target){
-    let el = target.closest('.obj');
-    while(el && el.parentElement && el.parentElement.id !== 'canvas'){
-      el = el.parentElement.closest('.obj');
-    }
-    return el;
-  }
-
-  canvas.addEventListener('mousedown', (e)=>{
-    const rotHandle = e.target.closest('.rotate-handle');
-    if(rotHandle){
-      startRotate(Number(rotHandle.dataset.id), e);
-      return;
-    }
-    const resizeHandle = e.target.closest('.handle');
-    if(resizeHandle){
-      const topEl = findTopObjEl(resizeHandle);
-      if(topEl) startResize(Number(topEl.dataset.id), resizeHandle.dataset.handle, e);
-      return;
-    }
-    const objEl = findTopObjEl(e.target);
-    if(objEl){
-      const id = Number(objEl.dataset.id);
-      if(e.shiftKey){
-        if(selectedIds.includes(id)) selectedIds = selectedIds.filter(x=>x!==id);
-        else selectedIds = selectedIds.concat([id]);
-        render();
-      } else {
-        const alreadySingle = selectedIds.length===1 && selectedIds[0]===id;
-        if(!alreadySingle){ selectedIds = [id]; render(); }
-        startDrag(id, e);
-      }
-    } else if(!e.shiftKey){
-      selectedIds = [];
-      render();
-    }
+    artboard.appendChild(el);
   });
 
-  function startDrag(id, e){
-    const obj = getObj(id);
-    drag = {mode:'move', id, startX:e.clientX, startY:e.clientY, ox:obj.x, oy:obj.y};
-  }
-  function startResize(id, handle, e){
-    e.stopPropagation();
-    const obj = getObj(id);
-    drag = {mode:'resize', handle, id, startX:e.clientX, startY:e.clientY,
-             ox:obj.x, oy:obj.y, ow:obj.w, oh:obj.h};
-  }
-  function startRotate(id, e){
-    e.stopPropagation();
-    const obj = getObj(id);
-    const rect = canvas.getBoundingClientRect();
-    drag = {mode:'rotate', id, rect, cx: obj.x+obj.w/2, cy: obj.y+obj.h/2};
-  }
+  if(selectedId!==null){
+    const s = getSelected();
+    if(s){
+      const box = getBBox(s);
+      const rectEl = document.createElementNS(SVG_NS,'rect');
+      rectEl.setAttribute('x', box.x); rectEl.setAttribute('y', box.y);
+      rectEl.setAttribute('width', box.w); rectEl.setAttribute('height', box.h);
+      rectEl.classList.add('sel-box');
+      artboard.appendChild(rectEl);
 
-  window.addEventListener('mousemove', (e)=>{
-    if(!drag) return;
-    const obj = getObj(drag.id);
-    if(!obj) return;
-
-    if(drag.mode==='move'){
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      obj.x = drag.ox + dx;
-      obj.y = drag.oy + dy;
-    } else if(drag.mode==='resize'){
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      const minSize = 20;
-      if(drag.handle==='se'){
-        obj.w = Math.max(minSize, drag.ow + dx);
-        obj.h = Math.max(minSize, drag.oh + dy);
-      } else if(drag.handle==='sw'){
-        obj.w = Math.max(minSize, drag.ow - dx);
-        obj.h = Math.max(minSize, drag.oh + dy);
-        obj.x = drag.ox + (drag.ow - obj.w);
-      } else if(drag.handle==='ne'){
-        obj.w = Math.max(minSize, drag.ow + dx);
-        obj.h = Math.max(minSize, drag.oh - dy);
-        obj.y = drag.oy + (drag.oh - obj.h);
-      } else if(drag.handle==='nw'){
-        obj.w = Math.max(minSize, drag.ow - dx);
-        obj.h = Math.max(minSize, drag.oh - dy);
-        obj.x = drag.ox + (drag.ow - obj.w);
-        obj.y = drag.oy + (drag.oh - obj.h);
-      }
-    } else if(drag.mode==='rotate'){
-      const mx = e.clientX - drag.rect.left;
-      const my = e.clientY - drag.rect.top;
-      let angleDeg = Math.atan2(my - drag.cy, mx - drag.cx) * 180/Math.PI;
-      let rot = angleDeg + 90;
-      if(e.shiftKey) rot = Math.round(rot/15)*15;
-      rot = ((rot % 360) + 360) % 360;
-      obj.rot = rot;
-    }
-    render();
-  });
-  window.addEventListener('mouseup', ()=>{ drag = null; });
-
-  /* ---------- キーボード削除 ---------- */
-  window.addEventListener('keydown', (e)=>{
-    const tag = document.activeElement && document.activeElement.tagName;
-    if(tag==='INPUT' || tag==='TEXTAREA' || tag==='SELECT') return;
-    if((e.key==='Delete' || e.key==='Backspace') && selectedIds.length>0){
-      e.preventDefault();
-      removeSelected();
-    }
-  });
-
-  /* ---------- 図形追加 ---------- */
-  document.querySelectorAll('[data-shape]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const id = nextUid();
-      objects.push({
-        id, type:'shape', shapeType: btn.dataset.shape,
-        x:40, y:40, w:100, h:100, rot:0, flip:false,
-        color:{r:143,g:178,b:255,a:1}
-      });
-      selectedIds = [id];
-      render();
-    });
-  });
-
-  /* ---------- 画像追加 ---------- */
-  const imageInput = document.getElementById('imageInput');
-  document.getElementById('btnAddImage').addEventListener('click', ()=> imageInput.click());
-  imageInput.addEventListener('change', (e)=>{
-    const file = e.target.files[0];
-    if(!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev)=>{
-      const id = nextUid();
-      objects.push({
-        id, type:'image', src: ev.target.result,
-        x:40, y:40, w:220, h:160, rot:0, flip:false,
-        color:{r:255,g:255,b:255,a:1}
-      });
-      selectedIds = [id];
-      render();
-    };
-    reader.readAsDataURL(file);
-    imageInput.value = '';
-  });
-
-  /* ---------- 色スライダー ---------- */
-  const sliderR = document.getElementById('sliderR');
-  const sliderG = document.getElementById('sliderG');
-  const sliderB = document.getElementById('sliderB');
-  const sliderA = document.getElementById('sliderA');
-  const valR = document.getElementById('valR');
-  const valG = document.getElementById('valG');
-  const valB = document.getElementById('valB');
-  const valA = document.getElementById('valA');
-
-  function syncColorSliders(obj){
-    sliderR.value = obj.color.r; valR.textContent = obj.color.r;
-    sliderG.value = obj.color.g; valG.textContent = obj.color.g;
-    sliderB.value = obj.color.b; valB.textContent = obj.color.b;
-    sliderA.value = obj.color.a; valA.textContent = obj.color.a.toFixed(2);
-  }
-  function onColorInput(){
-    if(selectedIds.length!==1) return;
-    const obj = getObj(selectedIds[0]);
-    if(!obj || obj.type==='group') return;
-    obj.color.r = Number(sliderR.value);
-    obj.color.g = Number(sliderG.value);
-    obj.color.b = Number(sliderB.value);
-    obj.color.a = Number(sliderA.value);
-    valR.textContent = obj.color.r;
-    valG.textContent = obj.color.g;
-    valB.textContent = obj.color.b;
-    valA.textContent = obj.color.a.toFixed(2);
-    render();
-  }
-  [sliderR,sliderG,sliderB,sliderA].forEach(s=> s.addEventListener('input', onColorInput));
-
-  /* ---------- レイヤー操作 ---------- */
-  document.querySelectorAll('.layer-block [data-layer]').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      if(selectedIds.length!==1) return;
-      const id = selectedIds[0];
-      console.log('レイヤー操作:', btn.dataset.layer, 'target id:', id);
-      const idx = objects.findIndex(o=>o.id===id);
-      if(idx===-1) return;
-      const [obj] = objects.splice(idx,1);
-      switch(btn.dataset.layer){
-        case 'front': objects.splice(Math.min(idx+1, objects.length), 0, obj); break;
-        case 'back': objects.splice(Math.max(idx-1, 0), 0, obj); break;
-        case 'front-most': objects.push(obj); break;
-        case 'back-most': objects.unshift(obj); break;
-      }
-      render();
-    });
-  });
-
-  /* ---------- 反転 ---------- */
-  document.getElementById('btnFlip').addEventListener('click', ()=>{
-    if(selectedIds.length!==1) return;
-    const obj = getObj(selectedIds[0]);
-    if(!obj) return;
-    obj.flip = !obj.flip;
-    render();
-  });
-
-  /* ---------- 削除 ---------- */
-  function removeSelected(){
-    if(selectedIds.length===0) return;
-    objects = objects.filter(o=>!selectedIds.includes(o.id));
-    selectedIds = [];
-    render();
-    showToast('選択した部品を削除しました');
-  }
-  document.getElementById('btnDelete').addEventListener('click', removeSelected);
-
-  /* ---------- 結合 / 分解 ---------- */
-  document.getElementById('btnCombine').addEventListener('click', ()=>{
-    if(selectedIds.length<2) return;
-    const selObjs = objects.filter(o=>selectedIds.includes(o.id));
-    const minX = Math.min(...selObjs.map(o=>o.x));
-    const minY = Math.min(...selObjs.map(o=>o.y));
-    const maxX = Math.max(...selObjs.map(o=>o.x+o.w));
-    const maxY = Math.max(...selObjs.map(o=>o.y+o.h));
-    const group = {
-      id: nextUid(), type:'group',
-      x:minX, y:minY, w:maxX-minX, h:maxY-minY, rot:0, flip:false,
-      color:{r:255,g:255,b:255,a:1},
-      children: selObjs.map(o=>Object.assign({}, o, {x:o.x-minX, y:o.y-minY}))
-    };
-    objects = objects.filter(o=>!selectedIds.includes(o.id));
-    objects.push(group);
-    selectedIds = [group.id];
-    render();
-    showToast('部品を結合しました');
-  });
-
-  document.getElementById('btnDecompose').addEventListener('click', ()=>{
-    if(selectedIds.length!==1) return;
-    const id = selectedIds[0];
-    const idx = objects.findIndex(o=>o.id===id);
-    if(idx===-1) return;
-    const group = objects[idx];
-    if(group.type!=='group') return;
-    const restored = group.children.map(c=> Object.assign({}, c, {x:c.x+group.x, y:c.y+group.y}));
-    objects.splice(idx, 1, ...restored);
-    selectedIds = restored.map(r=>r.id);
-    render();
-    showToast('部品を分解しました');
-  });
-
-  /* ---------- キャンバスサイズ / 機種 ---------- */
-  function applyCanvasSize(w,h){
-    canvas.style.width = w+'px';
-    canvas.style.height = h+'px';
-  }
-  canvasW.addEventListener('input', ()=>{
-    deviceSelect.value = 'custom';
-    applyCanvasSize(Number(canvasW.value)||40, Number(canvasH.value)||40);
-  });
-  canvasH.addEventListener('input', ()=>{
-    deviceSelect.value = 'custom';
-    applyCanvasSize(Number(canvasW.value)||40, Number(canvasH.value)||40);
-  });
-  deviceSelect.addEventListener('change', ()=>{
-    if(deviceSelect.value==='custom') return;
-    const [w,h] = deviceSelect.value.split('x').map(Number);
-    canvasW.value = w; canvasH.value = h;
-    applyCanvasSize(w,h);
-  });
-
-  /* ---------- ヘッダー：ホーム / 新規作成 ---------- */
-  document.getElementById('btnHome').addEventListener('click', ()=>{
-    window.location.href = 'home.html';
-  });
-
-  document.getElementById('btnNew').addEventListener('click', ()=>{
-    if(objects.length===0 || confirm('新規作成すると現在の編集内容は失われます。よろしいですか？')){
-      objects = [];
-      selectedIds = [];
-      uid = 1;
-      canvasW.value = 420; canvasH.value = 280; deviceSelect.value = '420x280';
-      applyCanvasSize(420,280);
-      render();
-      showToast('新しいプロジェクトを作成しました');
-    }
-  });
-
-  /* ---------- フィードバック ---------- */
-  document.getElementById('btnFeedback').addEventListener('click', ()=>{
-    window.open('https://scratch.mit.edu/users/short-kusa', '_blank', 'noopener');
-  });
-
-  /* ---------- ファイルメニュー ---------- */
-  const btnFile = document.getElementById('btnFile');
-  const fileMenu = document.getElementById('fileMenu');
-  btnFile.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    fileMenu.classList.toggle('hidden');
-  });
-  document.addEventListener('click', ()=> fileMenu.classList.add('hidden'));
-  fileMenu.addEventListener('click', (e)=> e.stopPropagation());
-
-  const loadingMask = document.getElementById('loadingMask');
-  function setLoading(on, msg){
-    loadingMask.textContent = msg || '書き出し中…';
-    loadingMask.classList.toggle('hidden', !on);
-  }
-  function downloadBlob(blob, filename){
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(()=> URL.revokeObjectURL(url), 4000);
-  }
-
-  async function captureComposite(){
-    const prevSel = selectedIds;
-    selectedIds = [];
-    render();
-    await new Promise(r=>setTimeout(r, 30));
-    const shot = await html2canvas(canvas, {backgroundColor:'#ffffff', scale:2});
-    selectedIds = prevSel;
-    render();
-    return shot;
-  }
-
-  /* 部品(オブジェクト)を個別のPNGとして描画する（グループは子要素に展開） */
-  function flattenParts(list){
-    let result = [];
-    list.forEach(o=>{
-      if(o.type==='group'){
-        result = result.concat(flattenParts(o.children));
-      } else {
-        result.push(o);
-      }
-    });
-    return result;
-  }
-
-  function renderPartToDataURL(obj){
-    const w = Math.max(1, Math.round(obj.w));
-    const h = Math.max(1, Math.round(obj.h));
-    const diag = Math.ceil(Math.sqrt(w*w + h*h)) + 4;
-    const cnv = document.createElement('canvas');
-    cnv.width = diag; cnv.height = diag;
-    const ctx = cnv.getContext('2d');
-
-    return new Promise((resolve)=>{
-      ctx.save();
-      ctx.translate(diag/2, diag/2);
-      ctx.rotate(obj.rot * Math.PI/180);
-      if(obj.flip) ctx.scale(-1,1);
-
-      if(obj.type==='image'){
-        const img = new Image();
-        img.onload = ()=>{
-          ctx.globalAlpha = obj.color.a;
-          ctx.drawImage(img, -w/2, -h/2, w, h);
-          ctx.globalAlpha = obj.color.a * 0.45;
-          ctx.globalCompositeOperation = 'multiply';
-          ctx.fillStyle = `rgb(${obj.color.r},${obj.color.g},${obj.color.b})`;
-          ctx.fillRect(-w/2, -h/2, w, h);
-          ctx.restore();
-          resolve(cnv.toDataURL('image/png'));
-        };
-        img.onerror = ()=>{ ctx.restore(); resolve(null); };
-        img.src = obj.src;
-      } else {
-        ctx.fillStyle = `rgba(${obj.color.r},${obj.color.g},${obj.color.b},${obj.color.a})`;
-        if(obj.shapeType==='rect'){
-          ctx.fillRect(-w/2, -h/2, w, h);
-        } else if(obj.shapeType==='circle'){
-          ctx.beginPath();
-          ctx.ellipse(0, 0, w/2, h/2, 0, 0, Math.PI*2);
-          ctx.fill();
-        } else if(obj.shapeType==='triangle'){
-          ctx.beginPath();
-          ctx.moveTo(0, -h/2);
-          ctx.lineTo(-w/2, h/2);
-          ctx.lineTo(w/2, h/2);
-          ctx.closePath();
-          ctx.fill();
-        }
-        ctx.restore();
-        resolve(cnv.toDataURL('image/png'));
-      }
-    });
-  }
-
-  function partFileName(obj, index){
-    const typeLabel = obj.type==='image' ? 'image' :
-      (obj.shapeType==='rect' ? 'rect' : obj.shapeType==='circle' ? 'circle' : 'triangle');
-    return `parts/part${String(index+1).padStart(2,'0')}_${typeLabel}.png`;
-  }
-
-  async function saveAsZip(){
-    setLoading(true, 'ZIPを作成中…');
-    try{
-      const shot = await captureComposite();
-      const compositeDataUrl = shot.toDataURL('image/png');
-
-      const zip = new JSZip();
-      zip.file('design.png', compositeDataUrl.split(',')[1], {base64:true});
-      zip.file('project.json', JSON.stringify({
-        canvas:{ w: canvas.offsetWidth, h: canvas.offsetHeight },
-        objects
-      }, null, 2));
-
-      const parts = flattenParts(objects);
-      for(let i=0;i<parts.length;i++){
-        const dataUrl = await renderPartToDataURL(parts[i]);
-        if(dataUrl){
-          zip.file(partFileName(parts[i], i), dataUrl.split(',')[1], {base64:true});
+      if(transformMode){
+        if(s.type==='rect' || s.type==='triangle'){
+          // vertex handles: drag each corner independently
+          s.points.forEach((pt,i)=>{
+            const h = document.createElementNS(SVG_NS,'rect');
+            const sz=10;
+            h.setAttribute('x', pt.x-sz/2); h.setAttribute('y', pt.y-sz/2);
+            h.setAttribute('width', sz); h.setAttribute('height', sz);
+            h.classList.add('handle');
+            h.style.cursor='move';
+            h.addEventListener('pointerdown',(e)=>onVertexPointerDown(e, s, i));
+            artboard.appendChild(h);
+          });
+        } else if(s.type==='circle' || s.type==='text' || s.type==='path'){
+          const dirs = [
+            ['nw', box.x, box.y], ['n', box.x+box.w/2, box.y], ['ne', box.x+box.w, box.y],
+            ['w', box.x, box.y+box.h/2], ['e', box.x+box.w, box.y+box.h/2],
+            ['sw', box.x, box.y+box.h], ['s', box.x+box.w/2, box.y+box.h], ['se', box.x+box.w, box.y+box.h]
+          ];
+          dirs.forEach(([dir,hx,hy])=>{
+            const h = document.createElementNS(SVG_NS,'rect');
+            const sz=9;
+            h.setAttribute('x', hx-sz/2); h.setAttribute('y', hy-sz/2);
+            h.setAttribute('width', sz); h.setAttribute('height', sz);
+            h.classList.add('handle');
+            h.dataset.dir = dir;
+            h.style.cursor = dir.length===1 ? (dir==='n'||dir==='s'?'ns-resize':'ew-resize') :
+                             (dir==='nw'||dir==='se'?'nwse-resize':'nesw-resize');
+            h.addEventListener('pointerdown',(e)=>onHandlePointerDown(e, s, dir));
+            artboard.appendChild(h);
+          });
         }
       }
-
-      const blob = await zip.generateAsync({type:'blob'});
-      downloadBlob(blob, 'ui-design.zip');
-      showToast('ZIPファイルを保存しました（部品ごとに分割済み）');
-    }catch(err){
-      console.error(err);
-      showToast('ZIPの作成に失敗しました');
-    }finally{
-      setLoading(false);
     }
   }
 
-  async function saveAsPdf(){
-    setLoading(true, 'PDFを作成中…');
-    try{
-      const shot = await captureComposite();
-      const dataUrl = shot.toDataURL('image/png');
-      const { jsPDF } = window.jspdf;
-      const w = shot.width, h = shot.height;
-      const pdf = new jsPDF({
-        orientation: w >= h ? 'landscape' : 'portrait',
-        unit: 'pt',
-        format: [w/2, h/2]
-      });
-      pdf.addImage(dataUrl, 'PNG', 0, 0, w/2, h/2);
-      pdf.save('ui-design.pdf');
-      showToast('PDFファイルを保存しました');
-    }catch(err){
-      console.error(err);
-      showToast('PDFの作成に失敗しました');
-    }finally{
-      setLoading(false);
-    }
-  }
+  updateRightPanel();
+  updateToolUI();
+}
 
-  const zipInput = document.getElementById('zipInput');
-  function triggerReplaceZip(){ zipInput.click(); }
-
-  zipInput.addEventListener('change', async (e)=>{
-    const file = e.target.files[0];
-    zipInput.value = '';
-    if(!file) return;
-    setLoading(true, 'ZIPを読み込み中…');
-    try{
-      const zip = await JSZip.loadAsync(file);
-
-      // project.json があれば完全復元（結合状態や部品配置ごと置き換え）
-      const projectEntry = zip.file('project.json');
-      if(projectEntry){
-        const text = await projectEntry.async('string');
-        const parsed = JSON.parse(text);
-        if(parsed && Array.isArray(parsed.objects)){
-          objects = parsed.objects;
-          let maxId = 0;
-          const scan = (list)=>{
-            list.forEach(o=>{
-              maxId = Math.max(maxId, o.id);
-              if(o.type==='group') scan(o.children);
-            });
-          };
-          scan(objects);
-          uid = maxId + 1;
-          selectedIds = [];
-          if(parsed.canvas){
-            canvasW.value = parsed.canvas.w; canvasH.value = parsed.canvas.h;
-            deviceSelect.value = 'custom';
-            applyCanvasSize(parsed.canvas.w, parsed.canvas.h);
-          }
-          render();
-          showToast('ZIPファイルからプロジェクトを置き換えました');
-          return;
-        }
-      }
-
-      // project.json が無ければ、含まれる最初の画像で置き換え
-      let imageEntry = null, imageName = null;
-      zip.forEach((path, entry)=>{
-        if(!imageEntry && /\.(png|jpe?g|gif|webp|svg)$/i.test(path)){
-          imageEntry = entry; imageName = path;
-        }
-      });
-      if(!imageEntry){
-        showToast('ZIP内に画像ファイルが見つかりませんでした');
-        return;
-      }
-      const ext = imageName.split('.').pop().toLowerCase();
-      const mime = ext==='svg' ? 'image/svg+xml' : (ext==='jpg' ? 'image/jpeg' : 'image/'+ext);
-      const base64 = await imageEntry.async('base64');
-      const dataUrl = `data:${mime};base64,${base64}`;
-
-      const existingImage = objects.find(o=>o.type==='image');
-      if(existingImage){
-        existingImage.src = dataUrl;
-      } else {
-        objects.push({
-          id: nextUid(), type:'image', src: dataUrl,
-          x:40, y:40, w:220, h:160, rot:0, flip:false,
-          color:{r:255,g:255,b:255,a:1}
-        });
-      }
-      render();
-      showToast('ZIPファイルから画像を置き換えました');
-    }catch(err){
-      console.error(err);
-      showToast('ZIPの読み込みに失敗しました');
-    }finally{
-      setLoading(false);
-    }
+function updateToolUI(){
+  document.querySelectorAll('.tool-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.tool===currentTool);
   });
+  const hints = {
+    select: '図形をクリックして選択・ドラッグで移動できます',
+    rect:   'キャンバス上をドラッグして四角形を描きます',
+    triangle:'キャンバス上をドラッグして三角形を描きます',
+    circle: 'キャンバス上をドラッグして円を描きます',
+    text:   'キャンバスをクリックしてテキストを配置します',
+    pen:    'キャンバス上をドラッグして自由に描けます',
+    eraser: '図形をクリックすると削除します'
+  };
+  toolHint.textContent = hints[currentTool] || '';
+}
 
-  fileMenu.addEventListener('click', (e)=>{
-    const btn = e.target.closest('button[data-action]');
-    if(!btn) return;
-    fileMenu.classList.add('hidden');
-    const action = btn.dataset.action;
-    if(action==='savezip') saveAsZip();
-    else if(action==='savepdf') saveAsPdf();
-    else if(action==='replacezip') triggerReplaceZip();
-  });
+function updateRightPanel(){
+  const s = getSelected();
+  if(!s){ rightPanel.classList.remove('open'); return; }
+  rightPanel.classList.add('open');
+  document.getElementById('transformToggle').classList.toggle('on', transformMode);
+  transformHint.textContent = (s.type==='rect'||s.type==='triangle')
+    ? '頂点をドラッグして自由に変形できます'
+    : '四隅・辺のハンドルでサイズを変更できます';
+  document.getElementById('rSlider').value = s.color.r;
+  document.getElementById('gSlider').value = s.color.g;
+  document.getElementById('bSlider').value = s.color.b;
+  document.getElementById('aSlider').value = Math.round(s.color.a*100);
+  document.getElementById('colorSwatch').style.background = rgba(s.color);
+}
 
-  /* ---------- トースト ---------- */
-  let toastTimer = null;
-  function showToast(msg){
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(()=> t.classList.remove('show'), 2600);
+/* ================= Coordinates ================= */
+function svgPoint(evt){
+  const rect = artboard.getBoundingClientRect();
+  const scaleX = canvas.w / rect.width;
+  const scaleY = canvas.h / rect.height;
+  return { x:(evt.clientX-rect.left)*scaleX, y:(evt.clientY-rect.top)*scaleY };
+}
+
+/* ================= Shape creation (Scratch-style drag draw) ================= */
+let shapeDrawState = null;
+let previewEl = null;
+
+function startShapeDraw(e, type){
+  const start = svgPoint(e);
+  shapeDrawState = { type, startX:start.x, startY:start.y, current:{x:start.x,y:start.y,w:0,h:0} };
+  previewEl = document.createElementNS(SVG_NS, type==='circle' ? 'ellipse' : 'polygon');
+  previewEl.classList.add('shape-preview');
+  artboard.appendChild(previewEl);
+  updatePreview();
+  window.addEventListener('pointermove', onShapeDrawMove);
+  window.addEventListener('pointerup', onShapeDrawUp);
+}
+
+function updatePreview(){
+  const {type,current} = shapeDrawState;
+  const {x,y,w,h} = current;
+  if(type==='rect'){
+    previewEl.setAttribute('points', `${x},${y} ${x+w},${y} ${x+w},${y+h} ${x},${y+h}`);
+  } else if(type==='triangle'){
+    previewEl.setAttribute('points', `${x+w/2},${y} ${x},${y+h} ${x+w},${y+h}`);
+  } else if(type==='circle'){
+    previewEl.setAttribute('cx', x+w/2); previewEl.setAttribute('cy', y+h/2);
+    previewEl.setAttribute('rx', w/2); previewEl.setAttribute('ry', h/2);
   }
+}
 
-  /* ---------- 初期描画 ---------- */
-  applyCanvasSize(420,280);
+function onShapeDrawMove(e){
+  if(!shapeDrawState) return;
+  const p = svgPoint(e);
+  const x = Math.min(p.x, shapeDrawState.startX);
+  const y = Math.min(p.y, shapeDrawState.startY);
+  const w = Math.abs(p.x - shapeDrawState.startX);
+  const h = Math.abs(p.y - shapeDrawState.startY);
+  shapeDrawState.current = {x,y,w,h};
+  updatePreview();
+}
+
+function onShapeDrawUp(){
+  window.removeEventListener('pointermove', onShapeDrawMove);
+  window.removeEventListener('pointerup', onShapeDrawUp);
+  if(previewEl){ previewEl.remove(); previewEl=null; }
+  if(!shapeDrawState) return;
+  let {x,y,w,h} = shapeDrawState.current;
+  const type = shapeDrawState.type;
+  if(w<6 && h<6){ w=120; h = (type==='circle')?120:90; }
+  w = Math.max(w,10); h = Math.max(h,10);
+
+  const shape = { id: uid(), type, color: {...DEFAULT_SHAPE_COLOR} };
+  if(type==='rect'){
+    shape.points = [ {x,y}, {x:x+w,y}, {x:x+w,y:y+h}, {x,y:y+h} ];
+  } else if(type==='triangle'){
+    shape.points = [ {x:x+w/2,y}, {x,y:y+h}, {x:x+w,y:y+h} ];
+  } else if(type==='circle'){
+    shape.x=x; shape.y=y; shape.w=w; shape.h=h;
+  }
+  shapes.push(shape);
+  selectedId = shape.id;
+  transformMode = true;
+  shapeDrawState = null;
   render();
+}
+
+function createTextAt(cx,cy){
+  const val = prompt('テキストを入力', 'テキスト');
+  if(val===null) return;
+  const shape = { id: uid(), type:'text', text: val || ' ', color:{...DEFAULT_TEXT_COLOR},
+    x:cx-70, y:cy-20, w:140, h:40 };
+  shapes.push(shape);
+  selectedId = shape.id;
+  transformMode = true;
+  render();
+}
+
+/* ================= Move / resize / vertex-drag ================= */
+let dragState = null;
+
+function onShapePointerDown(e, shape){
+  e.stopPropagation();
+  if(currentTool==='eraser'){
+    shapes = shapes.filter(s=>s.id!==shape.id);
+    if(selectedId===shape.id) selectedId=null;
+    render();
+    return;
+  }
+  if(currentTool==='pen'){
+    startPenStroke(e);
+    return;
+  }
+  selectedId = shape.id;
+  render();
+  const start = svgPoint(e);
+  dragState = { mode:'move', shape, startX:start.x, startY:start.y, orig: JSON.parse(JSON.stringify(shape)) };
+  window.addEventListener('pointermove', onWindowPointerMove);
+  window.addEventListener('pointerup', onWindowPointerUp);
+}
+
+function onVertexPointerDown(e, shape, index){
+  e.stopPropagation();
+  const start = svgPoint(e);
+  dragState = { mode:'vertex', shape, index, startX:start.x, startY:start.y, orig: {...shape.points[index]} };
+  window.addEventListener('pointermove', onWindowPointerMove);
+  window.addEventListener('pointerup', onWindowPointerUp);
+}
+
+function onHandlePointerDown(e, shape, dir){
+  e.stopPropagation();
+  const start = svgPoint(e);
+  dragState = { mode:'resize', shape, dir, startX:start.x, startY:start.y, orig: JSON.parse(JSON.stringify(shape)) };
+  window.addEventListener('pointermove', onWindowPointerMove);
+  window.addEventListener('pointerup', onWindowPointerUp);
+}
+
+function onWindowPointerMove(e){
+  if(!dragState) return;
+  const p = svgPoint(e);
+  const dx = p.x - dragState.startX;
+  const dy = p.y - dragState.startY;
+  const shape = dragState.shape;
+  const orig = dragState.orig;
+
+  if(dragState.mode==='move'){
+    if(shape.points){
+      shape.points = orig.points.map(pt=>({x:pt.x+dx, y:pt.y+dy}));
+    } else {
+      shape.x = orig.x + dx;
+      shape.y = orig.y + dy;
+    }
+  } else if(dragState.mode==='vertex'){
+    shape.points[dragState.index] = { x: orig.x+dx, y: orig.y+dy };
+  } else if(dragState.mode==='resize'){
+    let {x,y,w,h} = orig;
+    const dir = dragState.dir;
+    if(dir.includes('n')){ y = orig.y+dy; h = orig.h-dy; }
+    if(dir.includes('s')){ h = orig.h+dy; }
+    if(dir.includes('w')){ x = orig.x+dx; w = orig.w-dx; }
+    if(dir.includes('e')){ w = orig.w+dx; }
+    w = Math.max(w,10); h = Math.max(h,10);
+    if(dir.includes('n')) y = orig.y+orig.h-h;
+    if(dir.includes('w')) x = orig.x+orig.w-w;
+
+    if(shape.type==='path'){
+      const scaleX = w/orig.w, scaleY = h/orig.h;
+      shape.points = orig.points.map(pt=>({
+        x: x + (pt.x-orig.x)*scaleX,
+        y: y + (pt.y-orig.y)*scaleY
+      }));
+    }
+    shape.x=x; shape.y=y; shape.w=w; shape.h=h;
+  }
+  render();
+}
+
+function onWindowPointerUp(){
+  dragState = null;
+  window.removeEventListener('pointermove', onWindowPointerMove);
+  window.removeEventListener('pointerup', onWindowPointerUp);
+}
+
+/* ================= Pen tool ================= */
+let currentPenPoints = null;
+
+function startPenStroke(e){
+  const p = svgPoint(e);
+  currentPenPoints = [p];
+  window.addEventListener('pointermove', onPenMove);
+  window.addEventListener('pointerup', onPenUp);
+}
+function onPenMove(e){
+  if(!currentPenPoints) return;
+  currentPenPoints.push(svgPoint(e));
+  drawTempPath();
+}
+function drawTempPath(){
+  let temp = document.getElementById('tempPenPath');
+  if(!temp){
+    temp = document.createElementNS(SVG_NS,'path');
+    temp.id='tempPenPath';
+    temp.setAttribute('fill','none');
+    temp.setAttribute('stroke', rgba(DEFAULT_PEN_COLOR));
+    temp.setAttribute('stroke-width',4);
+    temp.setAttribute('stroke-linecap','round');
+    temp.setAttribute('stroke-linejoin','round');
+    artboard.appendChild(temp);
+  }
+  let d='';
+  currentPenPoints.forEach((p,i)=>{ d += (i===0?'M':'L')+p.x+' '+p.y+' '; });
+  temp.setAttribute('d', d);
+}
+function onPenUp(){
+  window.removeEventListener('pointermove', onPenMove);
+  window.removeEventListener('pointerup', onPenUp);
+  const temp = document.getElementById('tempPenPath');
+  if(temp) temp.remove();
+  if(currentPenPoints && currentPenPoints.length>1){
+    const bbox = pathBBox(currentPenPoints);
+    shapes.push({ id: uid(), type:'path', points: currentPenPoints, color:{...DEFAULT_PEN_COLOR}, ...bbox });
+  }
+  currentPenPoints = null;
+  render();
+}
+
+/* ================= Background (empty canvas) interaction ================= */
+artboard.addEventListener('pointerdown', (e)=>{
+  const isBackground = e.target === artboard || e.target.dataset.bg === "1";
+  if(!isBackground) return;
+
+  if(currentTool==='select'){
+    selectedId = null; render(); return;
+  }
+  if(currentTool==='rect' || currentTool==='triangle' || currentTool==='circle'){
+    startShapeDraw(e, currentTool); return;
+  }
+  if(currentTool==='text'){
+    const p = svgPoint(e);
+    createTextAt(p.x, p.y); return;
+  }
+  if(currentTool==='pen'){
+    startPenStroke(e); return;
+  }
+  // eraser on empty background: nothing to do
+});
+
+/* ================= Tool panel ================= */
+function setDockOpen(open){
+  toolPanel.classList.toggle('open', open);
+  dockToggle.style.display = open ? 'none' : 'flex';
+}
+dockToggle.addEventListener('click', ()=>setDockOpen(true));
+dockCloseInner.addEventListener('click', (e)=>{ e.stopPropagation(); setDockOpen(false); });
+
+document.querySelectorAll('.tool-btn[data-tool]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    currentTool = btn.dataset.tool;
+    updateToolUI();
+  });
+});
+
+/* ================= Right panel actions ================= */
+document.getElementById('transformToggle').addEventListener('click', ()=>{
+  transformMode = !transformMode;
+  render();
+});
+document.getElementById('frontBtn').addEventListener('click', ()=>{
+  const s=getSelected(); if(!s) return;
+  const i = shapes.indexOf(s);
+  if(i<shapes.length-1){ shapes.splice(i,1); shapes.splice(i+1,0,s); render(); }
+});
+document.getElementById('backBtn').addEventListener('click', ()=>{
+  const s=getSelected(); if(!s) return;
+  const i = shapes.indexOf(s);
+  if(i>0){ shapes.splice(i,1); shapes.splice(i-1,0,s); render(); }
+});
+document.getElementById('frontMostBtn').addEventListener('click', ()=>{
+  const s=getSelected(); if(!s) return;
+  shapes.splice(shapes.indexOf(s),1); shapes.push(s); render();
+});
+document.getElementById('backMostBtn').addEventListener('click', ()=>{
+  const s=getSelected(); if(!s) return;
+  shapes.splice(shapes.indexOf(s),1); shapes.unshift(s); render();
+});
+document.getElementById('deleteBtn').addEventListener('click', ()=>{
+  const s=getSelected(); if(!s) return;
+  shapes = shapes.filter(x=>x.id!==s.id);
+  selectedId = null;
+  render();
+});
+['r','g','b'].forEach(ch=>{
+  document.getElementById(ch+'Slider').addEventListener('input',(e)=>{
+    const s=getSelected(); if(!s) return;
+    s.color[ch] = parseInt(e.target.value,10);
+    render();
+  });
+});
+document.getElementById('aSlider').addEventListener('input',(e)=>{
+  const s=getSelected(); if(!s) return;
+  s.color.a = parseInt(e.target.value,10)/100;
+  render();
+});
+
+/* ================= Top bar: dropdowns ================= */
+function toggleMenu(menuEl){
+  const isOpen = menuEl.style.display==='flex';
+  document.querySelectorAll('.dropdown').forEach(d=>d.style.display='none');
+  menuEl.style.display = isOpen ? 'none' : 'flex';
+}
+document.getElementById('fileBtn').addEventListener('click', (e)=>{ e.stopPropagation(); toggleMenu(document.getElementById('fileMenu')); });
+document.getElementById('settingsBtn').addEventListener('click', (e)=>{ e.stopPropagation(); toggleMenu(document.getElementById('settingsMenu')); });
+document.querySelectorAll('.dropdown').forEach(d=>d.addEventListener('click', e=>e.stopPropagation()));
+document.addEventListener('click', ()=>{ document.querySelectorAll('.dropdown').forEach(d=>d.style.display='none'); });
+
+document.getElementById('deviceSelect').addEventListener('change',(e)=>{
+  const preset = DEVICE_PRESETS[e.target.value];
+  if(preset){ canvas = {...preset}; }
+  applyCanvasSize();
+  render();
+});
+
+document.getElementById('newBtn').addEventListener('click', ()=>{
+  if(shapes.length && !confirm('現在の内容は削除されます。新規作成しますか？')) return;
+  shapes = [];
+  selectedId = null;
+  filename = 'untitled';
+  filenameInput.value = filename;
+  render();
+});
+
+/* ================= Filename rename ================= */
+renameBtn.addEventListener('click', ()=>{
+  filenameInput.disabled = false;
+  filenameInput.focus();
+  filenameInput.select();
+});
+filenameInput.addEventListener('blur', commitFilename);
+filenameInput.addEventListener('keydown',(e)=>{ if(e.key==='Enter') filenameInput.blur(); });
+function commitFilename(){
+  filename = filenameInput.value.trim() || 'untitled';
+  filenameInput.value = filename;
+  filenameInput.disabled = true;
+}
+
+/* =====================================================================
+   File I/O — implemented natively (no external libraries / no CDN),
+   so Save/Load works fully offline and reliably.
+   ===================================================================== */
+
+/* ---- raster helpers ---- */
+function rasterizeToCanvas(){
+  return new Promise((resolve,reject)=>{
+    const clone = artboard.cloneNode(true);
+    clone.querySelectorAll('.handle,.sel-box,.shape-preview').forEach(n=>n.remove());
+    const temp = clone.querySelector('#tempPenPath'); if(temp) temp.remove();
+    clone.setAttribute('width', canvas.w);
+    clone.setAttribute('height', canvas.h);
+    const svgString = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob([svgString], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = ()=>{
+      const c = document.createElement('canvas');
+      c.width = canvas.w; c.height = canvas.h;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,c.width,c.height);
+      ctx.drawImage(img,0,0);
+      URL.revokeObjectURL(url);
+      resolve(c);
+    };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('画像の生成に失敗しました')); };
+    img.src = url;
+  });
+}
+function dataURLToBytes(dataUrl){
+  const base64 = dataUrl.split(',')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+  return bytes;
+}
+function downloadBlob(blob, name){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ---- minimal PDF writer (embeds a single JPEG page, no libs needed) ---- */
+function buildMinimalPdf(jpegBytes, width, height){
+  const encoder = new TextEncoder();
+  const parts = [];
+  const offsets = {};
+  let pos = 0;
+  function push(chunk){
+    const bytes = typeof chunk === 'string' ? encoder.encode(chunk) : chunk;
+    parts.push(bytes);
+    pos += bytes.length;
+  }
+  push('%PDF-1.4\n');
+  offsets[1]=pos; push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
+  offsets[2]=pos; push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
+  offsets[3]=pos; push(`3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width} ${height}] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>\nendobj\n`);
+  offsets[4]=pos; push(`4 0 obj\n<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`);
+  push(jpegBytes);
+  push('\nendstream\nendobj\n');
+  const content = `q ${width} 0 0 ${height} 0 0 cm /Im0 Do Q`;
+  offsets[5]=pos; push(`5 0 obj\n<< /Length ${content.length} >>\nstream\n${content}\nendstream\nendobj\n`);
+  const xrefStart = pos;
+  push('xref\n0 6\n0000000000 65535 f \n');
+  for(let i=1;i<=5;i++){ push(String(offsets[i]).padStart(10,'0') + ' 00000 n \n'); }
+  push(`trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+  const total = parts.reduce((s,a)=>s+a.length,0);
+  const result = new Uint8Array(total);
+  let p=0; parts.forEach(a=>{ result.set(a,p); p+=a.length; });
+  return result;
+}
+
+/* ---- minimal ZIP writer / reader (store method only, no libs needed) ---- */
+const CRC_TABLE = (()=>{
+  const table = new Uint32Array(256);
+  for(let n=0;n<256;n++){
+    let c = n;
+    for(let k=0;k<8;k++){ c = (c & 1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1); }
+    table[n] = c >>> 0;
+  }
+  return table;
 })();
+function crc32(bytes){
+  let crc = 0xFFFFFFFF;
+  for(let i=0;i<bytes.length;i++){ crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8); }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+function buildZip(files){
+  const encoder = new TextEncoder();
+  const localParts = [], centralParts = [], localOffsets = [];
+  let offset = 0;
+  files.forEach(f=>{
+    const nameBytes = encoder.encode(f.name);
+    const data = f.data;
+    const crc = crc32(data);
+    const size = data.length;
+    const header = new Uint8Array(30 + nameBytes.length);
+    const dv = new DataView(header.buffer);
+    dv.setUint32(0, 0x04034b50, true);
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, 0, true);
+    dv.setUint16(8, 0, true);
+    dv.setUint16(10, 0, true);
+    dv.setUint16(12, 0, true);
+    dv.setUint32(14, crc, true);
+    dv.setUint32(18, size, true);
+    dv.setUint32(22, size, true);
+    dv.setUint16(26, nameBytes.length, true);
+    dv.setUint16(28, 0, true);
+    header.set(nameBytes, 30);
+    localOffsets.push(offset);
+    localParts.push(header, data);
+    offset += header.length + data.length;
+  });
+  let centralOffset = offset;
+  files.forEach((f,i)=>{
+    const nameBytes = encoder.encode(f.name);
+    const data = f.data;
+    const crc = crc32(data);
+    const size = data.length;
+    const central = new Uint8Array(46 + nameBytes.length);
+    const dv = new DataView(central.buffer);
+    dv.setUint32(0, 0x02014b50, true);
+    dv.setUint16(4, 20, true);
+    dv.setUint16(6, 20, true);
+    dv.setUint16(8, 0, true);
+    dv.setUint16(10, 0, true);
+    dv.setUint16(12, 0, true);
+    dv.setUint16(14, 0, true);
+    dv.setUint32(16, crc, true);
+    dv.setUint32(20, size, true);
+    dv.setUint32(24, size, true);
+    dv.setUint16(28, nameBytes.length, true);
+    dv.setUint16(30, 0, true);
+    dv.setUint16(32, 0, true);
+    dv.setUint16(34, 0, true);
+    dv.setUint16(36, 0, true);
+    dv.setUint32(38, 0, true);
+    dv.setUint32(42, localOffsets[i], true);
+    central.set(nameBytes, 46);
+    centralParts.push(central);
+    offset += central.length;
+  });
+  const centralSize = offset - centralOffset;
+  const end = new Uint8Array(22);
+  const dvEnd = new DataView(end.buffer);
+  dvEnd.setUint32(0, 0x06054b50, true);
+  dvEnd.setUint16(4, 0, true);
+  dvEnd.setUint16(6, 0, true);
+  dvEnd.setUint16(8, files.length, true);
+  dvEnd.setUint16(10, files.length, true);
+  dvEnd.setUint32(12, centralSize, true);
+  dvEnd.setUint32(16, centralOffset, true);
+  dvEnd.setUint16(20, 0, true);
+  const all = [...localParts, ...centralParts, end];
+  const total = all.reduce((s,a)=>s+a.length,0);
+  const result = new Uint8Array(total);
+  let p=0; all.forEach(a=>{ result.set(a,p); p+=a.length; });
+  return result;
+}
+function parseZip(bytes){
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocdOffset = -1;
+  for(let i=bytes.length-22; i>=0; i--){
+    if(dv.getUint32(i,true)===0x06054b50){ eocdOffset=i; break; }
+  }
+  if(eocdOffset<0) throw new Error('ZIP形式が不正です');
+  const numEntries = dv.getUint16(eocdOffset+10, true);
+  const centralDirOffset = dv.getUint32(eocdOffset+16, true);
+  let ptr = centralDirOffset;
+  const files = {};
+  for(let i=0;i<numEntries;i++){
+    const sig = dv.getUint32(ptr,true);
+    if(sig!==0x02014b50) throw new Error('ZIP central directoryが破損しています');
+    const method = dv.getUint16(ptr+10, true);
+    const compSize = dv.getUint32(ptr+20, true);
+    const nameLen = dv.getUint16(ptr+28, true);
+    const extraLen = dv.getUint16(ptr+30, true);
+    const commentLen = dv.getUint16(ptr+32, true);
+    const localOffset = dv.getUint32(ptr+42, true);
+    const nameBytes = bytes.slice(ptr+46, ptr+46+nameLen);
+    const name = new TextDecoder().decode(nameBytes);
+    if(method !== 0){
+      throw new Error('圧縮されたZIPは未対応です（本アプリで保存したZIPのみ読み込み可能です）');
+    }
+    const lNameLen = dv.getUint16(localOffset+26, true);
+    const lExtraLen = dv.getUint16(localOffset+28, true);
+    const dataStart = localOffset + 30 + lNameLen + lExtraLen;
+    files[name] = bytes.slice(dataStart, dataStart+compSize);
+    ptr += 46 + nameLen + extraLen + commentLen;
+  }
+  return files;
+}
+
+/* ---- File menu actions ---- */
+document.getElementById('pdfSaveBtn').addEventListener('click', async ()=>{
+  try{
+    const canvasEl = await rasterizeToCanvas();
+    const jpegDataUrl = canvasEl.toDataURL('image/jpeg', 0.92);
+    const jpegBytes = dataURLToBytes(jpegDataUrl);
+    const pdfBytes = buildMinimalPdf(jpegBytes, canvas.w, canvas.h);
+    downloadBlob(new Blob([pdfBytes], {type:'application/pdf'}), filename + '.pdf');
+  }catch(err){
+    alert('PDF保存に失敗しました: ' + err.message);
+  }
+});
+
+document.getElementById('zipSaveBtn').addEventListener('click', async ()=>{
+  try{
+    const canvasEl = await rasterizeToCanvas();
+    const pngBytes = dataURLToBytes(canvasEl.toDataURL('image/png'));
+    const jsonBytes = new TextEncoder().encode(JSON.stringify({canvas, shapes}, null, 2));
+    const zipBytes = buildZip([
+      {name:'data.json', data: jsonBytes},
+      {name:'preview.png', data: pngBytes}
+    ]);
+    downloadBlob(new Blob([zipBytes], {type:'application/zip'}), filename + '.zip');
+  }catch(err){
+    alert('zip保存に失敗しました: ' + err.message);
+  }
+});
+
+document.getElementById('zipLoadInput').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  try{
+    const buf = new Uint8Array(await file.arrayBuffer());
+    const files = parseZip(buf);
+    if(!files['data.json']) throw new Error('data.jsonが見つかりません');
+    const text = new TextDecoder().decode(files['data.json']);
+    const parsed = JSON.parse(text);
+    canvas = parsed.canvas || canvas;
+    shapes = parsed.shapes || [];
+    idCounter = shapes.reduce((m,s)=>Math.max(m,s.id||0), 0);
+    selectedId = null;
+    filename = file.name.replace(/\.zip$/i,'');
+    filenameInput.value = filename;
+    applyCanvasSize();
+    render();
+  }catch(err){
+    alert('読み込みに失敗しました: ' + err.message);
+  }
+  e.target.value = '';
+});
+
+/* ================= Keyboard delete ================= */
+window.addEventListener('keydown',(e)=>{
+  if(document.activeElement === filenameInput) return;
+  if((e.key==='Delete' || e.key==='Backspace') && selectedId!==null){
+    shapes = shapes.filter(s=>s.id!==selectedId);
+    selectedId = null;
+    render();
+  }
+});
+
+/* ================= Init ================= */
+applyCanvasSize();
+render();
 </script>
 </body>
 </html>
