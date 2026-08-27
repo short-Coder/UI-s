@@ -25,6 +25,9 @@
 :root{
   --accent:#3559E0;
   --accent-dark:#233C99;
+
+  --topbar:#84cae3;
+  --topbar-dark:#5fa9c9;
   --accent-soft:#E4EAFF;
 
   --panel-bg:#F1F3F8;
@@ -100,8 +103,8 @@ textarea{
   background:
     linear-gradient(
       180deg,
-      var(--accent) 0%,
-      var(--accent-dark) 100%
+      var(--topbar) 0%,
+      var(--topbar-dark) 100%
     );
 
   display:flex;
@@ -989,6 +992,8 @@ svg.artboard{
       <div class="text-edit-wrap" id="textEditWrap" style="display:none;">
         <div class="color-label">テキスト内容</div>
         <textarea id="textEditArea" class="text-edit-area" rows="3"></textarea>
+        <div class="color-label" style="margin-top:6px;">文字サイズ</div>
+        <div class="slider-row"><span>Aa</span><input type="range" id="fontSizeSlider" min="10" max="160"></div>
       </div>
 
       <div class="btn-row">
@@ -1016,7 +1021,7 @@ let shapes = [];
 let idCounter = 0;
 let selectedId = null;
 let currentTool = "select";
-let transformMode = true;
+let transformMode = false;
 let filename = "untitled";
 
 let canvas = { w: 900, h: 600 };
@@ -1049,6 +1054,7 @@ const toolHint = document.getElementById('toolHint');
 const transformHint = document.getElementById('transformHint');
 const textEditWrap = document.getElementById('textEditWrap');
 const textEditArea = document.getElementById('textEditArea');
+const fontSizeSlider = document.getElementById('fontSizeSlider');
 
 /* ================= Utility ================= */
 function uid(){ return ++idCounter; }
@@ -1141,39 +1147,39 @@ function render(){
       rectEl.classList.add('sel-box');
       artboard.appendChild(rectEl);
 
-      if(transformMode){
-        if(s.type==='rect' || s.type==='triangle'){
-          // vertex handles: drag each corner independently
-          s.points.forEach((pt,i)=>{
-            const h = document.createElementNS(SVG_NS,'rect');
-            const sz=10;
-            h.setAttribute('x', pt.x-sz/2); h.setAttribute('y', pt.y-sz/2);
-            h.setAttribute('width', sz); h.setAttribute('height', sz);
-            h.classList.add('handle');
-            h.dataset.vertex = i;
-            h.style.cursor='move';
-            h.addEventListener('pointerdown',(e)=>onVertexPointerDown(e, s, i));
-            artboard.appendChild(h);
-          });
-        } else if(s.type==='circle' || s.type==='text' || s.type==='path'){
-          const dirs = [
-            ['nw', box.x, box.y], ['n', box.x+box.w/2, box.y], ['ne', box.x+box.w, box.y],
-            ['w', box.x, box.y+box.h/2], ['e', box.x+box.w, box.y+box.h/2],
-            ['sw', box.x, box.y+box.h], ['s', box.x+box.w/2, box.y+box.h], ['se', box.x+box.w, box.y+box.h]
-          ];
-          dirs.forEach(([dir,hx,hy])=>{
-            const h = document.createElementNS(SVG_NS,'rect');
-            const sz=9;
-            h.setAttribute('x', hx-sz/2); h.setAttribute('y', hy-sz/2);
-            h.setAttribute('width', sz); h.setAttribute('height', sz);
-            h.classList.add('handle');
-            h.dataset.dir = dir;
-            h.style.cursor = dir.length===1 ? (dir==='n'||dir==='s'?'ns-resize':'ew-resize') :
-                             (dir==='nw'||dir==='se'?'nwse-resize':'nesw-resize');
-            h.addEventListener('pointerdown',(e)=>onHandlePointerDown(e, s, dir));
-            artboard.appendChild(h);
-          });
-        }
+      const useVertexHandles = (s.type==='rect' || s.type==='triangle') && transformMode;
+      if(useVertexHandles){
+        // 変形ツールON: drag each corner point independently (free distort)
+        s.points.forEach((pt,i)=>{
+          const h = document.createElementNS(SVG_NS,'rect');
+          const sz=10;
+          h.setAttribute('x', pt.x-sz/2); h.setAttribute('y', pt.y-sz/2);
+          h.setAttribute('width', sz); h.setAttribute('height', sz);
+          h.classList.add('handle');
+          h.dataset.vertex = i;
+          h.style.cursor='move';
+          h.addEventListener('pointerdown',(e)=>onVertexPointerDown(e, s, i));
+          artboard.appendChild(h);
+        });
+      } else {
+        // 通常時: uniform bounding-box scale handles (works for every shape type)
+        const dirs = [
+          ['nw', box.x, box.y], ['n', box.x+box.w/2, box.y], ['ne', box.x+box.w, box.y],
+          ['w', box.x, box.y+box.h/2], ['e', box.x+box.w, box.y+box.h/2],
+          ['sw', box.x, box.y+box.h], ['s', box.x+box.w/2, box.y+box.h], ['se', box.x+box.w, box.y+box.h]
+        ];
+        dirs.forEach(([dir,hx,hy])=>{
+          const h = document.createElementNS(SVG_NS,'rect');
+          const sz=9;
+          h.setAttribute('x', hx-sz/2); h.setAttribute('y', hy-sz/2);
+          h.setAttribute('width', sz); h.setAttribute('height', sz);
+          h.classList.add('handle');
+          h.dataset.dir = dir;
+          h.style.cursor = dir.length===1 ? (dir==='n'||dir==='s'?'ns-resize':'ew-resize') :
+                           (dir==='nw'||dir==='se'?'nwse-resize':'nesw-resize');
+          h.addEventListener('pointerdown',(e)=>onHandlePointerDown(e, s, dir));
+          artboard.appendChild(h);
+        });
       }
     }
   }
@@ -1203,14 +1209,17 @@ function updateRightPanel(){
   if(!s){ rightPanel.classList.remove('open'); return; }
   rightPanel.classList.add('open');
   document.getElementById('transformToggle').classList.toggle('on', transformMode);
-  transformHint.textContent = (s.type==='rect'||s.type==='triangle')
+  transformHint.textContent = ((s.type==='rect'||s.type==='triangle') && transformMode)
     ? '頂点をドラッグして自由に変形できます'
-    : '四隅・辺のハンドルでサイズを変更できます';
+    : '四隅・辺のハンドルで拡大縮小できます';
 
   if(s.type === 'text'){
     textEditWrap.style.display = 'flex';
     if(document.activeElement !== textEditArea){
       textEditArea.value = s.text;
+    }
+    if(document.activeElement !== fontSizeSlider){
+      fontSizeSlider.value = Math.round(s.h*0.6);
     }
   } else {
     textEditWrap.style.display = 'none';
@@ -1228,6 +1237,15 @@ textEditArea.addEventListener('input', ()=>{
   if(!s || s.type!=='text') return;
   s.text = textEditArea.value || ' ';
   updateShapeDom(s);
+});
+
+fontSizeSlider.addEventListener('input', ()=>{
+  const s = getSelected();
+  if(!s || s.type!=='text') return;
+  const fontSize = parseInt(fontSizeSlider.value, 10);
+  s.h = fontSize/0.6;
+  updateShapeDom(s);
+  updateSelectionOverlay(s);
 });
 
 /* ================= Coordinates ================= */
@@ -1316,7 +1334,6 @@ function onShapeDrawUp(){
   }
   shapes.push(shape);
   selectedId = shape.id;
-  transformMode = true;
   shapeDrawState = null;
   render();
 }
@@ -1328,7 +1345,6 @@ function createTextAt(cx,cy){
     x:cx-70, y:cy-20, w:140, h:40 };
   shapes.push(shape);
   selectedId = shape.id;
-  transformMode = true;
   render();
 }
 
@@ -1366,7 +1382,8 @@ function updateSelectionOverlay(shape){
     selBox.setAttribute('x', box.x); selBox.setAttribute('y', box.y);
     selBox.setAttribute('width', box.w); selBox.setAttribute('height', box.h);
   }
-  if(shape.type==='rect' || shape.type==='triangle'){
+  const useVertexHandles = (shape.type==='rect' || shape.type==='triangle') && transformMode;
+  if(useVertexHandles){
     shape.points.forEach((pt,i)=>{
       const h = artboard.querySelector(`.handle[data-vertex="${i}"]`);
       if(h){
@@ -1375,7 +1392,7 @@ function updateSelectionOverlay(shape){
         h.setAttribute('y', pt.y-sz/2);
       }
     });
-  } else if(shape.type==='circle' || shape.type==='text' || shape.type==='path'){
+  } else {
     const dirPositions = {
       nw:[box.x, box.y], n:[box.x+box.w/2, box.y], ne:[box.x+box.w, box.y],
       w:[box.x, box.y+box.h/2], e:[box.x+box.w, box.y+box.h/2],
@@ -1426,7 +1443,9 @@ function onHandlePointerDown(e, shape, dir){
   e.stopPropagation();
   e.preventDefault();
   const start = svgPoint(e);
-  dragState = { mode:'resize', shape, dir, startX:start.x, startY:start.y, orig: JSON.parse(JSON.stringify(shape)) };
+  const box = getBBox(shape);
+  const orig = { ...JSON.parse(JSON.stringify(shape)), ...box };
+  dragState = { mode:'resize', shape, dir, startX:start.x, startY:start.y, orig };
   window.addEventListener('pointermove', onWindowPointerMove);
   window.addEventListener('pointerup', onWindowPointerUp);
 }
@@ -1459,14 +1478,15 @@ function onWindowPointerMove(e){
     if(dir.includes('n')) y = orig.y+orig.h-h;
     if(dir.includes('w')) x = orig.x+orig.w-w;
 
-    if(shape.type==='path'){
+    if(shape.points){
       const scaleX = w/orig.w, scaleY = h/orig.h;
       shape.points = orig.points.map(pt=>({
         x: x + (pt.x-orig.x)*scaleX,
         y: y + (pt.y-orig.y)*scaleY
       }));
+    } else {
+      shape.x=x; shape.y=y; shape.w=w; shape.h=h;
     }
-    shape.x=x; shape.y=y; shape.w=w; shape.h=h;
   }
 
   updateShapeDom(shape);
@@ -1894,7 +1914,7 @@ document.getElementById('zipLoadInput').addEventListener('change', async (e)=>{
 
 /* ================= Keyboard delete ================= */
 window.addEventListener('keydown',(e)=>{
-  if(document.activeElement === filenameInput || document.activeElement === textEditArea) return;
+  if(document.activeElement === filenameInput || document.activeElement === textEditArea || document.activeElement === fontSizeSlider) return;
   if((e.key==='Delete' || e.key==='Backspace') && selectedId!==null){
     shapes = shapes.filter(s=>s.id!==selectedId);
     selectedId = null;
