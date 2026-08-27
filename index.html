@@ -271,6 +271,18 @@ textarea{
   letter-spacing:.4px;
 }
 
+.dropdown .section-note{
+  font-family:var(--ui-font);
+
+  font-size:11px;
+
+  line-height:1.5;
+
+  color:var(--ink-soft);
+
+  padding:6px 12px 8px;
+}
+
 
 /* ===============================
    Filename Box
@@ -512,12 +524,14 @@ textarea{
 
   display:flex;
 
-  align-items:center;
+  align-items:flex-start;
   justify-content:center;
 
   overflow:auto;
 
   position:relative;
+
+  padding:48px 0 120px;
 }
 
 .artboard-shell{
@@ -527,6 +541,8 @@ textarea{
     0 12px 40px rgba(0,0,0,.18);
 
   border-radius:4px;
+
+  flex:0 0 auto;
 }
 
 .artboard{
@@ -535,6 +551,48 @@ textarea{
   background:var(--page-bg);
 
   border-radius:4px;
+}
+
+
+/* Canvas extend handle (drag to lengthen the page below the device size) */
+
+.canvas-extend-handle{
+  position:absolute;
+
+  bottom:0;
+  left:50%;
+
+  transform:translate(-50%, 50%);
+
+  z-index:20;
+
+  width:40px;
+  height:26px;
+
+  border-radius:13px;
+
+  background:var(--ink);
+
+  color:#fff;
+
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+  cursor:ns-resize;
+
+  box-shadow:
+    0 4px 10px rgba(0,0,0,.28);
+
+  touch-action:none;
+}
+
+.canvas-extend-handle:hover{
+  background:var(--accent);
+}
+
+.canvas-extend-handle svg{
+  pointer-events:none;
 }
 
 
@@ -932,6 +990,7 @@ svg.artboard{
           <option value="mbp14">MacBook Pro 14 (960×600)</option>
           <option value="fhd">Full HD Desktop (960×540)</option>
         </select>
+        <div class="section-note">幅は機種サイズのまま、キャンバス下端のハンドル（⇕）をドラッグすると高さだけ伸ばせます。縦に長いWebサイトの作成にご利用ください。</div>
       </div>
     </div>
 
@@ -981,6 +1040,9 @@ svg.artboard{
     <div class="canvas-wrap" id="canvasWrap">
       <div class="artboard-shell" id="artboardShell">
         <svg class="artboard" id="artboard" xmlns="http://www.w3.org/2000/svg"></svg>
+        <div class="canvas-extend-handle" id="canvasExtendHandle" title="ドラッグしてページを下に伸ばせます（ダブルクリックで機種サイズに戻す）">
+          <svg width="16" height="16" viewBox="0 0 24 24"><path d="M12 5v14M5 12l7 7 7-7" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
       </div>
       <div class="tool-hint" id="toolHint"></div>
     </div>
@@ -1024,7 +1086,11 @@ let currentTool = "select";
 let transformMode = false;
 let filename = "untitled";
 
-let canvas = { w: 900, h: 600 };
+/* `foldY` marks the height of the originally-selected device preset.
+   The artboard can be dragged taller than this (via the extend handle)
+   so vertical/long web pages can be authored while keeping the chosen
+   device width. `foldY` is null when no device preset is active. */
+let canvas = { w: 900, h: 600, foldY: null };
 
 const DEVICE_PRESETS = {
   none:    null,
@@ -1035,6 +1101,8 @@ const DEVICE_PRESETS = {
   fhd:     {w:960,h:540},
 };
 
+const MIN_CANVAS_H = 100;
+
 const DEFAULT_SHAPE_COLOR = {r:76,g:111,b:255,a:1};
 const DEFAULT_TEXT_COLOR  = {r:26,g:29,b:41,a:1};
 const DEFAULT_PEN_COLOR   = {r:26,g:29,b:41,a:1};
@@ -1044,6 +1112,7 @@ const POINT_TYPES = ['rect','triangle','path']; // shapes represented as an edit
 /* ================= DOM refs ================= */
 const artboard = document.getElementById('artboard');
 const artboardShell = document.getElementById('artboardShell');
+const canvasExtendHandle = document.getElementById('canvasExtendHandle');
 const dockToggle = document.getElementById('dockToggle');
 const dockCloseInner = document.getElementById('dockCloseInner');
 const toolPanel = document.getElementById('toolPanel');
@@ -1093,6 +1162,19 @@ function render(){
   bg.dataset.bg = "1";
   artboard.appendChild(bg);
 
+  /* Shade the area below the original device height, so it's clear at a
+     glance which part is "below the fold" once the page has been
+     stretched taller than the selected device size. */
+  if(canvas.foldY && canvas.h > canvas.foldY + 0.5){
+    const shade = document.createElementNS(SVG_NS,'rect');
+    shade.setAttribute('x',0); shade.setAttribute('y', canvas.foldY);
+    shade.setAttribute('width', canvas.w); shade.setAttribute('height', canvas.h - canvas.foldY);
+    shade.setAttribute('fill', 'rgba(53,89,224,0.045)');
+    shade.classList.add('fold-guide');
+    shade.style.pointerEvents = 'none';
+    artboard.appendChild(shade);
+  }
+
   shapes.forEach(shape=>{
     let el;
     const c = shape.color;
@@ -1136,6 +1218,33 @@ function render(){
     }
     artboard.appendChild(el);
   });
+
+  /* Dashed marker + label for the bottom edge of the original device
+     size, drawn on top of the shapes so it stays legible. */
+  if(canvas.foldY && canvas.h > canvas.foldY + 0.5){
+    const foldLine = document.createElementNS(SVG_NS,'line');
+    foldLine.setAttribute('x1',0); foldLine.setAttribute('y1', canvas.foldY);
+    foldLine.setAttribute('x2',canvas.w); foldLine.setAttribute('y2', canvas.foldY);
+    foldLine.setAttribute('stroke', '#3559E0');
+    foldLine.setAttribute('stroke-width', 1.5);
+    foldLine.setAttribute('stroke-dasharray', '6 5');
+    foldLine.setAttribute('opacity', '0.55');
+    foldLine.classList.add('fold-guide');
+    foldLine.style.pointerEvents = 'none';
+    artboard.appendChild(foldLine);
+
+    const label = document.createElementNS(SVG_NS,'text');
+    label.setAttribute('x', 8);
+    label.setAttribute('y', canvas.foldY - 8);
+    label.setAttribute('font-size', 11);
+    label.setAttribute('font-weight', '700');
+    label.setAttribute('fill', '#3559E0');
+    label.setAttribute('opacity', '0.75');
+    label.classList.add('fold-guide');
+    label.style.pointerEvents = 'none';
+    label.textContent = `機種の画面の高さ（${Math.round(canvas.foldY)}px）ここより下はスクロールで表示`;
+    artboard.appendChild(label);
+  }
 
   if(selectedId!==null){
     const s = getSelected();
@@ -1500,6 +1609,47 @@ function onWindowPointerUp(){
   render();
 }
 
+/* ================= Canvas extend (lengthen page below device height) ================= */
+let extendDragState = null;
+
+function onExtendPointerDown(e){
+  e.stopPropagation();
+  e.preventDefault();
+  const rect = artboardShell.getBoundingClientRect();
+  extendDragState = {
+    startClientY: e.clientY,
+    startH: canvas.h,
+    scaleY: canvas.h / rect.height
+  };
+  window.addEventListener('pointermove', onExtendPointerMove);
+  window.addEventListener('pointerup', onExtendPointerUp);
+}
+
+function onExtendPointerMove(e){
+  if(!extendDragState) return;
+  const dy = (e.clientY - extendDragState.startClientY) * extendDragState.scaleY;
+  const minH = Math.max(MIN_CANVAS_H, canvas.foldY || 0);
+  canvas.h = Math.max(minH, Math.round(extendDragState.startH + dy));
+  applyCanvasSize();
+  render();
+}
+
+function onExtendPointerUp(){
+  window.removeEventListener('pointermove', onExtendPointerMove);
+  window.removeEventListener('pointerup', onExtendPointerUp);
+  extendDragState = null;
+}
+
+canvasExtendHandle.addEventListener('pointerdown', onExtendPointerDown);
+canvasExtendHandle.addEventListener('dblclick', (e)=>{
+  e.stopPropagation();
+  if(canvas.foldY){
+    canvas.h = canvas.foldY;
+    applyCanvasSize();
+    render();
+  }
+});
+
 /* ================= Pen tool ================= */
 let currentPenPoints = null;
 
@@ -1634,7 +1784,7 @@ document.addEventListener('click', ()=>{ document.querySelectorAll('.dropdown').
 
 document.getElementById('deviceSelect').addEventListener('change',(e)=>{
   const preset = DEVICE_PRESETS[e.target.value];
-  if(preset){ canvas = {...preset}; }
+  if(preset){ canvas = {w:preset.w, h:preset.h, foldY: preset.h}; }
   applyCanvasSize();
   render();
 });
@@ -1671,7 +1821,7 @@ function commitFilename(){
 function rasterizeToCanvas(){
   return new Promise((resolve,reject)=>{
     const clone = artboard.cloneNode(true);
-    clone.querySelectorAll('.handle,.sel-box,.shape-preview').forEach(n=>n.remove());
+    clone.querySelectorAll('.handle,.sel-box,.shape-preview,.fold-guide').forEach(n=>n.remove());
     const temp = clone.querySelector('#tempPenPath'); if(temp) temp.remove();
     clone.setAttribute('width', canvas.w);
     clone.setAttribute('height', canvas.h);
@@ -1899,6 +2049,7 @@ document.getElementById('zipLoadInput').addEventListener('change', async (e)=>{
     const text = new TextDecoder().decode(files['data.json']);
     const parsed = JSON.parse(text);
     canvas = parsed.canvas || canvas;
+    if(canvas.foldY === undefined) canvas.foldY = null;
     shapes = parsed.shapes || [];
     idCounter = shapes.reduce((m,s)=>Math.max(m,s.id||0), 0);
     selectedId = null;
