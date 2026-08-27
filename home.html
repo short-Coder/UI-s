@@ -1,1 +1,264 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>UI's Home</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
+<style>
+  body {
+    margin: 0;
+    font-family: "Segoe UI", sans-serif;
+    background: #05070d;
+    color: #e0e8ff;
+    overflow-x: hidden;
+  }
+
+  /* 背景の火の玉（エネルギー粒子） */
+  .particle {
+    position: fixed;
+    width: 6px;
+    height: 6px;
+    background: #00eaff;
+    border-radius: 50%;
+    opacity: 0.7;
+    pointer-events: none;
+    animation: float 6s linear infinite;
+  }
+  @keyframes float {
+    0% { transform: translateY(0) scale(1); opacity: 0.8; }
+    100% { transform: translateY(-120vh) scale(0.2); opacity: 0; }
+  }
+
+  /* ヒーローセクション */
+  .cyber-bg {
+    padding: 80px 20px;
+    text-align: center;
+    background: radial-gradient(circle at center, #0a0f1a 0%, #05070d 70%);
+    position: relative;
+  }
+
+  h1 {
+    font-size: 2.8rem;
+    margin-bottom: 10px;
+    letter-spacing: 3px;
+    text-shadow: 0 0 12px #00eaff;
+  }
+
+  .catch {
+    font-size: 1.2rem;
+    opacity: 0.9;
+    margin-bottom: 40px;
+    letterletter-spacing: 1px;
+    text-shadow: 0 0 8px #0099cc;
+  }
+
+  /* 電脳波紋ボタン（完全版） */
+  .new-btn {
+    position: relative;
+    display: inline-block;
+    padding: 16px 32px;
+    background: #00c8ff;
+    color: #001a33;
+    font-weight: bold;
+    border-radius: 8px;
+    text-decoration: none;
+    font-size: 1.2rem;
+    overflow: hidden;
+    box-shadow: 0 0 14px #00eaff;
+    transition: 0.25s;
+  }
+
+  /* ホバー時の電脳ノイズ */
+  .new-btn:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 0 22px #00eaff, 0 0 40px #00eaff inset;
+  }
+
+  /* ボタン内部の波紋 */
+  .new-btn::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(255,255,255,0.4);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    animation: ripple 2.4s infinite;
+  }
+
+  @keyframes ripple {
+    0% { width: 0; height: 0; opacity: 0.7; }
+    100% { width: 260px; height: 260px; opacity: 0; }
+  }
+
+  /* クイックスタート */
+  .quick {
+    max-width: 900px;
+    margin: 40px auto;
+    background: #0d1424;
+    padding: 24px;
+    border-radius: 10px;
+    box-shadow: 0 0 14px rgba(0,255,255,0.08);
+  }
+
+  .quick h2 {
+    margin-top: 0;
+    font-size: 1.4rem;
+  }
+
+  .new-small {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 10px 20px;
+    background: #00c8ff;
+    color: #001a33;
+    font-weight: bold;
+    border-radius: 6px;
+    text-decoration: none;
+    box-shadow: 0 0 10px #00e0ff;
+  }
+
+  /* 開発者メッセージ */
+  .devmsg {
+    max-width: 900px;
+    margin: 40px auto;
+    background: #0d1424;
+    padding: 28px;
+    border-left: 4px solid #00c8ff;
+    border-radius: 6px;
+    box-shadow: 0 0 14px rgba(0,255,255,0.08);
+  }
+
+  .devmsg h2 {
+    margin-top: 0;
+    font-size: 1.3rem;
+    letter-spacing: 1px;
+  }
+
+  .devmsg p {
+    line-height: 1.7;
+    opacity: 0.9;
+  }
+
+  footer {
+    text-align: center;
+    padding: 20px;
+    opacity: 0.6;
+    font-size: 0.85rem;
+  }
+
+  /* 画面全体の巨大波紋 */
+  #screen-ripple {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    width: 0;
+    height: 0;
+    background: rgba(0, 200, 255, 0.25);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 9999;
+  }
+</style>
+</head>
+
+<body>
+
+<!-- 画面波紋用の要素 -->
+<div id="screen-ripple"></div>
+
+<!-- 火の玉（高速湧き + クリック爆発） -->
+<script>
+  /* ============================
+     常時高速で湧き続ける火の玉
+     ============================ */
+  setInterval(() => {
+    const p = document.createElement("div");
+    p.className = "particle";
+    p.style.left = Math.random() * 100 + "vw";
+    p.style.top = "100vh"; // 下から湧く
+    p.style.animationDuration = (2 + Math.random() * 2) + "s"; // 高速化
+    document.body.appendChild(p);
+  }, 120); // 0.12秒ごとに1個（高速）
+
+
+  /* ============================
+     クリック時の爆発的火の玉生成
+     ============================ */
+  const mainBtn = document.querySelector('.new-btn');
+  const ripple = document.getElementById('screen-ripple');
+
+  mainBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+
+    // 爆発的に火の玉を大量生成
+    for (let i = 0; i < 100; i++) {
+      const p = document.createElement("div");
+      p.className = "particle";
+      p.style.left = Math.random() * 100 + "vw";
+      p.style.top = "100vh";
+      p.style.animationDuration = (1 + Math.random() * 1.5) + "s"; // さらに高速
+      document.body.appendChild(p);
+    }
+
+    /* ============================
+       画面全体の巨大波紋 → 遷移
+       ============================ */
+    ripple.style.transition = "none";
+    ripple.style.width = "0px";
+    ripple.style.height = "0px";
+    ripple.style.opacity = "1";
+
+    setTimeout(() => {
+      ripple.style.transition = "0.6s ease-out";
+      ripple.style.width = "2000px";
+      ripple.style.height = "2000px";
+      ripple.style.opacity = "0";
+    }, 10);
+
+    setTimeout(() => {
+      window.location.href = "program.html";
+    }, 600);
+  });
+</script>
+
+<!-- ヒーロー -->
+<section class="cyber-bg">
+  <h1>UI's</h1>
+  <div class="catch">コードは、美しく強く</div>
+  <a href="program.html" class="new-btn">＋ 新規作成</a>
+</section>
+
+<!-- クイックスタート -->
+<section class="quick">
+  <h2>クイックスタート</h2>
+  <p>すぐに新しいプログラムを作成できます。</p>
+  <a href="program.html" class="new-small">新規作成</a>
+</section>
+
+<!-- 開発者メッセージ -->
+<section class="devmsg">
+  <h2>開発者からのメッセージ</h2>
+  <p>
+    UI’s は「直感でコードを書く未来」を目指して作られています。  
+    触れた瞬間に理解できる UI、思考の速度で動く IDE、そして 新しい表現。  
+    これは既存の開発環境への挑戦であり、未来の開発者への贈り物です。
+  </p>
+  <p>
+    コードはもっと自由で、もっと鋭く、もっと美しくできる。  
+    AIだけではない。  
+    UI’s はそのための“電脳空間の入口”です。  
+    あなたの創造力が、この世界を形作ります。
+  </p>
+</section>
+
+<footer>
+  © 2026 UI's
+</footer>
+
+</body>
+</html>
