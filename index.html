@@ -100,12 +100,7 @@ textarea{
   height:58px;
   flex:0 0 auto;
 
-  background:
-    linear-gradient(
-      180deg,
-      var(--topbar) 0%,
-      var(--topbar-dark) 100%
-    );
+  background:var(--topbar);
 
   display:flex;
   align-items:center;
@@ -132,8 +127,6 @@ textarea{
   letter-spacing:.5px;
 
   padding:6px 12px;
-
-  font-style:italic;
 }
 
 
@@ -522,16 +515,11 @@ textarea{
 .canvas-wrap{
   flex:1;
 
-  display:flex;
-
-  align-items:flex-start;
-  justify-content:center;
-
   overflow:auto;
 
   position:relative;
 
-  padding:48px 0 120px;
+  padding:48px 48px 160px;
 }
 
 .artboard-shell{
@@ -542,7 +530,13 @@ textarea{
 
   border-radius:4px;
 
-  flex:0 0 auto;
+  /* margin:auto centers the artboard horizontally when it's smaller than
+     the viewport, and collapses to 0 (flush-left, normal block flow) once
+     the artboard is wider than the viewport -- so both the left and right
+     edges stay reachable via the wrap's horizontal scrollbar. Combined
+     with overflow:auto on the wrap, this also guarantees a working
+     vertical scrollbar all the way down to the height-extend handle. */
+  margin:0 auto;
 }
 
 .artboard{
@@ -941,6 +935,21 @@ svg.artboard{
   pointer-events:none;
 }
 
+.rotate-line{
+  stroke:var(--accent);
+  stroke-width:1.5;
+  stroke-dasharray:3 3;
+  opacity:.7;
+  pointer-events:none;
+}
+
+.rotate-handle{
+  fill:var(--accent);
+  stroke:#fff;
+  stroke-width:2;
+  cursor:grab;
+}
+
 
 /* ===============================
    Scrollbar
@@ -970,6 +979,7 @@ svg.artboard{
       <div class="dropdown" id="fileMenu" style="display:none;">
         <button id="pdfSaveBtn" type="button">PDF保存</button>
         <button id="zipSaveBtn" type="button">zipで保存</button>
+        <button id="exportCodeBtn" type="button">コード出力（index.html）</button>
         <label id="zipLoadLabel">zipを読み込み
           <input type="file" id="zipLoadInput" accept=".zip" style="display:none;">
         </label>
@@ -977,6 +987,9 @@ svg.artboard{
     </div>
 
     <button class="pill-btn" id="newBtn" type="button">新規</button>
+
+    <button class="pill-btn" id="undoBtn" type="button" title="元に戻す (Ctrl+Z)">↺</button>
+    <button class="pill-btn" id="redoBtn" type="button" title="やり直す (Ctrl+Y / Ctrl+Shift+Z)">↻</button>
 
     <div class="dropdown-wrap" id="settingsWrap">
       <button class="pill-btn" id="settingsBtn" type="button">設定</button>
@@ -1109,6 +1122,15 @@ const DEFAULT_PEN_COLOR   = {r:26,g:29,b:41,a:1};
 
 const POINT_TYPES = ['rect','triangle','path']; // shapes represented as an editable points array
 
+/* ---- Undo / Redo history (whole-state snapshots) ---- */
+let undoStack = [];
+let redoStack = [];
+const HISTORY_LIMIT = 100;
+
+/* ---- Copy / paste clipboard (in-memory, editor-local) ---- */
+let clipboardShape = null;
+let clipboardPasteCount = 0;
+
 /* ================= DOM refs ================= */
 const artboard = document.getElementById('artboard');
 const artboardShell = document.getElementById('artboardShell');
@@ -1130,6 +1152,13 @@ function uid(){ return ++idCounter; }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function rgba(c){ return `rgba(${c.r},${c.g},${c.b},${c.a})`; }
 
+function rotatePoint(px, py, cx, cy, angleDeg){
+  const rad = angleDeg * Math.PI / 180;
+  const cos = Math.cos(rad), sin = Math.sin(rad);
+  const dx = px - cx, dy = py - cy;
+  return { x: cx + dx*cos - dy*sin, y: cy + dx*sin + dy*cos };
+}
+
 function pathBBox(points){
   const xs = points.map(p=>p.x), ys = points.map(p=>p.y);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
@@ -1141,6 +1170,77 @@ function getBBox(shape){
   return {x:shape.x, y:shape.y, w:shape.w, h:shape.h};
 }
 function getSelected(){ return shapes.find(s=>s.id===selectedId); }
+
+function applyShapeTransform(el, shape){
+  const rot = shape.rotation || 0;
+  if(rot){
+    const box = getBBox(shape);
+    const cx = box.x+box.w/2, cy = box.y+box.h/2;
+    el.setAttribute('transform', `rotate(${rot} ${cx} ${cy})`);
+  } else {
+    el.removeAttribute('transform');
+  }
+}
+
+/* ================= Undo / Redo ================= */
+function snapshotState(){
+  return {
+    shapes: JSON.parse(JSON.stringify(shapes)),
+    canvas: JSON.parse(JSON.stringify(canvas)),
+    selectedId
+  };
+}
+function pushHistory(){
+  undoStack.push(snapshotState());
+  if(undoStack.length > HISTORY_LIMIT) undoStack.shift();
+  redoStack = [];
+}
+function restoreState(state){
+  shapes = JSON.parse(JSON.stringify(state.shapes));
+  canvas = JSON.parse(JSON.stringify(state.canvas));
+  selectedId = state.selectedId;
+  applyCanvasSize();
+  render();
+}
+function undo(){
+  if(undoStack.length===0) return;
+  const current = snapshotState();
+  const prev = undoStack.pop();
+  redoStack.push(current);
+  restoreState(prev);
+}
+function redo(){
+  if(redoStack.length===0) return;
+  const current = snapshotState();
+  const next = redoStack.pop();
+  undoStack.push(current);
+  restoreState(next);
+}
+
+/* ================= Copy / Paste ================= */
+function copySelected(){
+  const s = getSelected();
+  if(!s) return;
+  clipboardShape = JSON.parse(JSON.stringify(s));
+  clipboardPasteCount = 0;
+}
+function pasteClipboard(){
+  if(!clipboardShape) return;
+  pushHistory();
+  clipboardPasteCount++;
+  const offset = 16 * clipboardPasteCount;
+  const clone = JSON.parse(JSON.stringify(clipboardShape));
+  clone.id = uid();
+  if(clone.points){
+    clone.points = clone.points.map(p=>({x:p.x+offset, y:p.y+offset}));
+  } else {
+    clone.x += offset;
+    clone.y += offset;
+  }
+  shapes.push(clone);
+  selectedId = clone.id;
+  render();
+}
 
 /* ================= Canvas sizing ================= */
 function applyCanvasSize(){
@@ -1208,12 +1308,13 @@ function render(){
     }
     el.classList.add('shape-el');
     el.dataset.id = shape.id;
+    applyShapeTransform(el, shape);
     el.addEventListener('pointerdown', (e)=>onShapePointerDown(e, shape));
     if(shape.type==='text'){
       el.addEventListener('dblclick', (e)=>{
         e.stopPropagation();
         const val = prompt('テキストを編集', shape.text);
-        if(val !== null){ shape.text = val || ' '; render(); }
+        if(val !== null){ pushHistory(); shape.text = val || ' '; render(); }
       });
     }
     artboard.appendChild(el);
@@ -1250,11 +1351,22 @@ function render(){
     const s = getSelected();
     if(s){
       const box = getBBox(s);
+      const cx = box.x+box.w/2, cy = box.y+box.h/2;
+      const rot = s.rotation || 0;
+
+      // All selection visuals (bounding box, handles, rotate handle) live
+      // inside one <g>. Rotating that <g> about the shape's own center
+      // makes every handle orbit together with the shape, so the handle
+      // math itself can stay in the shape's simple, unrotated local space.
+      const group = document.createElementNS(SVG_NS,'g');
+      group.classList.add('selection-overlay');
+      if(rot){ group.setAttribute('transform', `rotate(${rot} ${cx} ${cy})`); }
+
       const rectEl = document.createElementNS(SVG_NS,'rect');
       rectEl.setAttribute('x', box.x); rectEl.setAttribute('y', box.y);
       rectEl.setAttribute('width', box.w); rectEl.setAttribute('height', box.h);
       rectEl.classList.add('sel-box');
-      artboard.appendChild(rectEl);
+      group.appendChild(rectEl);
 
       const useVertexHandles = (s.type==='rect' || s.type==='triangle') && transformMode;
       if(useVertexHandles){
@@ -1268,7 +1380,7 @@ function render(){
           h.dataset.vertex = i;
           h.style.cursor='move';
           h.addEventListener('pointerdown',(e)=>onVertexPointerDown(e, s, i));
-          artboard.appendChild(h);
+          group.appendChild(h);
         });
       } else {
         // 通常時: uniform bounding-box scale handles (works for every shape type)
@@ -1287,9 +1399,27 @@ function render(){
           h.style.cursor = dir.length===1 ? (dir==='n'||dir==='s'?'ns-resize':'ew-resize') :
                            (dir==='nw'||dir==='se'?'nwse-resize':'nesw-resize');
           h.addEventListener('pointerdown',(e)=>onHandlePointerDown(e, s, dir));
-          artboard.appendChild(h);
+          group.appendChild(h);
         });
       }
+
+      // Rotate handle: a small circle above the shape, joined by a dashed
+      // line, supported for every shape type (rect/triangle/circle/text/path).
+      const ROT_OFFSET = 28;
+      const rotLine = document.createElementNS(SVG_NS,'line');
+      rotLine.setAttribute('x1', cx); rotLine.setAttribute('y1', box.y);
+      rotLine.setAttribute('x2', cx); rotLine.setAttribute('y2', box.y-ROT_OFFSET);
+      rotLine.classList.add('rotate-line');
+      group.appendChild(rotLine);
+
+      const rotHandle = document.createElementNS(SVG_NS,'circle');
+      rotHandle.setAttribute('cx', cx); rotHandle.setAttribute('cy', box.y-ROT_OFFSET);
+      rotHandle.setAttribute('r', 7);
+      rotHandle.classList.add('handle','rotate-handle');
+      rotHandle.addEventListener('pointerdown',(e)=>onRotatePointerDown(e, s));
+      group.appendChild(rotHandle);
+
+      artboard.appendChild(group);
     }
   }
 
@@ -1341,16 +1471,22 @@ function updateRightPanel(){
   document.getElementById('colorSwatch').style.background = rgba(s.color);
 }
 
+let textEditHistorySaved = false;
+textEditArea.addEventListener('focus', ()=>{ textEditHistorySaved = false; });
 textEditArea.addEventListener('input', ()=>{
   const s = getSelected();
   if(!s || s.type!=='text') return;
+  if(!textEditHistorySaved){ pushHistory(); textEditHistorySaved = true; }
   s.text = textEditArea.value || ' ';
   updateShapeDom(s);
 });
 
+let fontSizeHistorySaved = false;
+fontSizeSlider.addEventListener('pointerdown', ()=>{ fontSizeHistorySaved = false; });
 fontSizeSlider.addEventListener('input', ()=>{
   const s = getSelected();
   if(!s || s.type!=='text') return;
+  if(!fontSizeHistorySaved){ pushHistory(); fontSizeHistorySaved = true; }
   const fontSize = parseInt(fontSizeSlider.value, 10);
   s.h = fontSize/0.6;
   updateShapeDom(s);
@@ -1433,7 +1569,7 @@ function onShapeDrawUp(){
   if(w<6 && h<6){ w=120; h = (type==='circle')?120:90; }
   w = Math.max(w,10); h = Math.max(h,10);
 
-  const shape = { id: uid(), type, color: {...DEFAULT_SHAPE_COLOR} };
+  const shape = { id: uid(), type, color: {...DEFAULT_SHAPE_COLOR}, rotation:0 };
   if(type==='rect'){
     shape.points = [ {x,y}, {x:x+w,y}, {x:x+w,y:y+h}, {x,y:y+h} ];
   } else if(type==='triangle'){
@@ -1441,6 +1577,7 @@ function onShapeDrawUp(){
   } else if(type==='circle'){
     shape.x=x; shape.y=y; shape.w=w; shape.h=h;
   }
+  pushHistory();
   shapes.push(shape);
   selectedId = shape.id;
   shapeDrawState = null;
@@ -1451,7 +1588,8 @@ function createTextAt(cx,cy){
   const val = prompt('テキストを入力', 'テキスト');
   if(val===null) return;
   const shape = { id: uid(), type:'text', text: val || ' ', color:{...DEFAULT_TEXT_COLOR},
-    x:cx-70, y:cy-20, w:140, h:40 };
+    x:cx-70, y:cy-20, w:140, h:40, rotation:0 };
+  pushHistory();
   shapes.push(shape);
   selectedId = shape.id;
   render();
@@ -1483,10 +1621,19 @@ function updateShapeDom(shape){
     shape.points.forEach((p,i)=>{ d += (i===0?'M':'L') + p.x + ' ' + p.y + ' '; });
     el.setAttribute('d', d);
   }
+  applyShapeTransform(el, shape);
 }
 function updateSelectionOverlay(shape){
+  const group = artboard.querySelector('.selection-overlay');
+  if(!group) return;
+
   const box = getBBox(shape);
-  const selBox = artboard.querySelector('.sel-box');
+  const cx = box.x+box.w/2, cy = box.y+box.h/2;
+  const rot = shape.rotation || 0;
+  if(rot){ group.setAttribute('transform', `rotate(${rot} ${cx} ${cy})`); }
+  else { group.removeAttribute('transform'); }
+
+  const selBox = group.querySelector('.sel-box');
   if(selBox){
     selBox.setAttribute('x', box.x); selBox.setAttribute('y', box.y);
     selBox.setAttribute('width', box.w); selBox.setAttribute('height', box.h);
@@ -1494,7 +1641,7 @@ function updateSelectionOverlay(shape){
   const useVertexHandles = (shape.type==='rect' || shape.type==='triangle') && transformMode;
   if(useVertexHandles){
     shape.points.forEach((pt,i)=>{
-      const h = artboard.querySelector(`.handle[data-vertex="${i}"]`);
+      const h = group.querySelector(`.handle[data-vertex="${i}"]`);
       if(h){
         const sz=10;
         h.setAttribute('x', pt.x-sz/2);
@@ -1508,7 +1655,7 @@ function updateSelectionOverlay(shape){
       sw:[box.x, box.y+box.h], s:[box.x+box.w/2, box.y+box.h], se:[box.x+box.w, box.y+box.h]
     };
     Object.keys(dirPositions).forEach(dir=>{
-      const h = artboard.querySelector(`.handle[data-dir="${dir}"]`);
+      const h = group.querySelector(`.handle[data-dir="${dir}"]`);
       if(h){
         const [hx,hy] = dirPositions[dir];
         const sz=9;
@@ -1517,11 +1664,24 @@ function updateSelectionOverlay(shape){
       }
     });
   }
+
+  const ROT_OFFSET = 28;
+  const rotLine = group.querySelector('.rotate-line');
+  if(rotLine){
+    rotLine.setAttribute('x1', cx); rotLine.setAttribute('y1', box.y);
+    rotLine.setAttribute('x2', cx); rotLine.setAttribute('y2', box.y-ROT_OFFSET);
+  }
+  const rotHandle = group.querySelector('.rotate-handle');
+  if(rotHandle){
+    rotHandle.setAttribute('cx', cx);
+    rotHandle.setAttribute('cy', box.y-ROT_OFFSET);
+  }
 }
 
 function onShapePointerDown(e, shape){
   e.stopPropagation();
   if(currentTool==='eraser'){
+    pushHistory();
     shapes = shapes.filter(s=>s.id!==shape.id);
     if(selectedId===shape.id) selectedId=null;
     render();
@@ -1534,7 +1694,7 @@ function onShapePointerDown(e, shape){
   selectedId = shape.id;
   render();
   const start = svgPoint(e);
-  dragState = { mode:'move', shape, startX:start.x, startY:start.y, orig: JSON.parse(JSON.stringify(shape)) };
+  dragState = { mode:'move', shape, startX:start.x, startY:start.y, orig: JSON.parse(JSON.stringify(shape)), historySaved:false };
   window.addEventListener('pointermove', onWindowPointerMove);
   window.addEventListener('pointerup', onWindowPointerUp);
 }
@@ -1542,8 +1702,12 @@ function onShapePointerDown(e, shape){
 function onVertexPointerDown(e, shape, index){
   e.stopPropagation();
   e.preventDefault();
-  const start = svgPoint(e);
-  dragState = { mode:'vertex', shape, index, startX:start.x, startY:start.y, orig: {...shape.points[index]} };
+  const box = getBBox(shape);
+  const cx = box.x+box.w/2, cy = box.y+box.h/2;
+  const rot = shape.rotation || 0;
+  const startRaw = svgPoint(e);
+  const start = rot ? rotatePoint(startRaw.x, startRaw.y, cx, cy, -rot) : startRaw;
+  dragState = { mode:'vertex', shape, index, startX:start.x, startY:start.y, orig: {...shape.points[index]}, rotCenter:{cx,cy}, rot, historySaved:false };
   window.addEventListener('pointermove', onWindowPointerMove);
   window.addEventListener('pointerup', onWindowPointerUp);
 }
@@ -1551,23 +1715,40 @@ function onVertexPointerDown(e, shape, index){
 function onHandlePointerDown(e, shape, dir){
   e.stopPropagation();
   e.preventDefault();
-  const start = svgPoint(e);
   const box = getBBox(shape);
+  const cx = box.x+box.w/2, cy = box.y+box.h/2;
+  const rot = shape.rotation || 0;
+  const startRaw = svgPoint(e);
+  const start = rot ? rotatePoint(startRaw.x, startRaw.y, cx, cy, -rot) : startRaw;
   const orig = { ...JSON.parse(JSON.stringify(shape)), ...box };
-  dragState = { mode:'resize', shape, dir, startX:start.x, startY:start.y, orig };
+  dragState = { mode:'resize', shape, dir, startX:start.x, startY:start.y, orig, rotCenter:{cx,cy}, rot, historySaved:false };
+  window.addEventListener('pointermove', onWindowPointerMove);
+  window.addEventListener('pointerup', onWindowPointerUp);
+}
+
+function onRotatePointerDown(e, shape){
+  e.stopPropagation();
+  e.preventDefault();
+  const box = getBBox(shape);
+  const cx = box.x+box.w/2, cy = box.y+box.h/2;
+  const start = svgPoint(e);
+  const startAngle = Math.atan2(start.y-cy, start.x-cx) * 180/Math.PI;
+  dragState = { mode:'rotate', shape, cx, cy, startAngle, startRotation: shape.rotation||0, historySaved:false };
   window.addEventListener('pointermove', onWindowPointerMove);
   window.addEventListener('pointerup', onWindowPointerUp);
 }
 
 function onWindowPointerMove(e){
   if(!dragState) return;
+  if(!dragState.historySaved){ pushHistory(); dragState.historySaved = true; }
+
   const p = svgPoint(e);
-  const dx = p.x - dragState.startX;
-  const dy = p.y - dragState.startY;
   const shape = dragState.shape;
-  const orig = dragState.orig;
 
   if(dragState.mode==='move'){
+    const dx = p.x - dragState.startX;
+    const dy = p.y - dragState.startY;
+    const orig = dragState.orig;
     if(shape.points){
       shape.points = orig.points.map(pt=>({x:pt.x+dx, y:pt.y+dy}));
     } else {
@@ -1575,8 +1756,19 @@ function onWindowPointerMove(e){
       shape.y = orig.y + dy;
     }
   } else if(dragState.mode==='vertex'){
+    // Convert the pointer into the shape's own unrotated coordinate
+    // space (fixed around the center captured at drag start) so vertex
+    // dragging feels natural even on a rotated shape.
+    const pLocal = dragState.rot ? rotatePoint(p.x,p.y,dragState.rotCenter.cx,dragState.rotCenter.cy,-dragState.rot) : p;
+    const dx = pLocal.x - dragState.startX;
+    const dy = pLocal.y - dragState.startY;
+    const orig = dragState.orig;
     shape.points[dragState.index] = { x: orig.x+dx, y: orig.y+dy };
   } else if(dragState.mode==='resize'){
+    const pLocal = dragState.rot ? rotatePoint(p.x,p.y,dragState.rotCenter.cx,dragState.rotCenter.cy,-dragState.rot) : p;
+    const dx = pLocal.x - dragState.startX;
+    const dy = pLocal.y - dragState.startY;
+    const orig = dragState.orig;
     let {x,y,w,h} = orig;
     const dir = dragState.dir;
     if(dir.includes('n')){ y = orig.y+dy; h = orig.h-dy; }
@@ -1596,6 +1788,11 @@ function onWindowPointerMove(e){
     } else {
       shape.x=x; shape.y=y; shape.w=w; shape.h=h;
     }
+  } else if(dragState.mode==='rotate'){
+    const angle = Math.atan2(p.y-dragState.cy, p.x-dragState.cx) * 180/Math.PI;
+    let newRotation = dragState.startRotation + (angle - dragState.startAngle);
+    if(e.shiftKey){ newRotation = Math.round(newRotation/15)*15; } // snap to 15°
+    shape.rotation = newRotation;
   }
 
   updateShapeDom(shape);
@@ -1619,7 +1816,8 @@ function onExtendPointerDown(e){
   extendDragState = {
     startClientY: e.clientY,
     startH: canvas.h,
-    scaleY: canvas.h / rect.height
+    scaleY: canvas.h / rect.height,
+    historySaved: false
   };
   window.addEventListener('pointermove', onExtendPointerMove);
   window.addEventListener('pointerup', onExtendPointerUp);
@@ -1627,6 +1825,7 @@ function onExtendPointerDown(e){
 
 function onExtendPointerMove(e){
   if(!extendDragState) return;
+  if(!extendDragState.historySaved){ pushHistory(); extendDragState.historySaved = true; }
   const dy = (e.clientY - extendDragState.startClientY) * extendDragState.scaleY;
   const minH = Math.max(MIN_CANVAS_H, canvas.foldY || 0);
   canvas.h = Math.max(minH, Math.round(extendDragState.startH + dy));
@@ -1643,7 +1842,8 @@ function onExtendPointerUp(){
 canvasExtendHandle.addEventListener('pointerdown', onExtendPointerDown);
 canvasExtendHandle.addEventListener('dblclick', (e)=>{
   e.stopPropagation();
-  if(canvas.foldY){
+  if(canvas.foldY && canvas.h !== canvas.foldY){
+    pushHistory();
     canvas.h = canvas.foldY;
     applyCanvasSize();
     render();
@@ -1687,7 +1887,8 @@ function onPenUp(){
   if(temp) temp.remove();
   if(currentPenPoints && currentPenPoints.length>1){
     const bbox = pathBBox(currentPenPoints);
-    shapes.push({ id: uid(), type:'path', points: currentPenPoints, color:{...DEFAULT_PEN_COLOR}, ...bbox });
+    pushHistory();
+    shapes.push({ id: uid(), type:'path', points: currentPenPoints, color:{...DEFAULT_PEN_COLOR}, rotation:0, ...bbox });
   }
   currentPenPoints = null;
   render();
@@ -1737,39 +1938,47 @@ document.getElementById('transformToggle').addEventListener('click', ()=>{
 document.getElementById('frontBtn').addEventListener('click', ()=>{
   const s=getSelected(); if(!s) return;
   const i = shapes.indexOf(s);
-  if(i<shapes.length-1){ shapes.splice(i,1); shapes.splice(i+1,0,s); render(); }
+  if(i<shapes.length-1){ pushHistory(); shapes.splice(i,1); shapes.splice(i+1,0,s); render(); }
 });
 document.getElementById('backBtn').addEventListener('click', ()=>{
   const s=getSelected(); if(!s) return;
   const i = shapes.indexOf(s);
-  if(i>0){ shapes.splice(i,1); shapes.splice(i-1,0,s); render(); }
+  if(i>0){ pushHistory(); shapes.splice(i,1); shapes.splice(i-1,0,s); render(); }
 });
 document.getElementById('frontMostBtn').addEventListener('click', ()=>{
   const s=getSelected(); if(!s) return;
+  pushHistory();
   shapes.splice(shapes.indexOf(s),1); shapes.push(s); render();
 });
 document.getElementById('backMostBtn').addEventListener('click', ()=>{
   const s=getSelected(); if(!s) return;
+  pushHistory();
   shapes.splice(shapes.indexOf(s),1); shapes.unshift(s); render();
 });
 document.getElementById('deleteBtn').addEventListener('click', ()=>{
   const s=getSelected(); if(!s) return;
+  pushHistory();
   shapes = shapes.filter(x=>x.id!==s.id);
   selectedId = null;
   render();
 });
-['r','g','b'].forEach(ch=>{
-  document.getElementById(ch+'Slider').addEventListener('input',(e)=>{
-    const s=getSelected(); if(!s) return;
-    s.color[ch] = parseInt(e.target.value,10);
+
+/* One history snapshot per slider drag (taken on the first 'input' event
+   after the pointer goes down), not one per pixel of movement. */
+function attachSliderHistory(el, applyFn){
+  let saved = false;
+  el.addEventListener('pointerdown', ()=>{ saved = false; });
+  el.addEventListener('input', (e)=>{
+    const s = getSelected(); if(!s) return;
+    if(!saved){ pushHistory(); saved = true; }
+    applyFn(s, e);
     render();
   });
+}
+['r','g','b'].forEach(ch=>{
+  attachSliderHistory(document.getElementById(ch+'Slider'), (s,e)=>{ s.color[ch] = parseInt(e.target.value,10); });
 });
-document.getElementById('aSlider').addEventListener('input',(e)=>{
-  const s=getSelected(); if(!s) return;
-  s.color.a = parseInt(e.target.value,10)/100;
-  render();
-});
+attachSliderHistory(document.getElementById('aSlider'), (s,e)=>{ s.color.a = parseInt(e.target.value,10)/100; });
 
 /* ================= Top bar: dropdowns ================= */
 function toggleMenu(menuEl){
@@ -1784,19 +1993,26 @@ document.addEventListener('click', ()=>{ document.querySelectorAll('.dropdown').
 
 document.getElementById('deviceSelect').addEventListener('change',(e)=>{
   const preset = DEVICE_PRESETS[e.target.value];
-  if(preset){ canvas = {w:preset.w, h:preset.h, foldY: preset.h}; }
+  if(preset){
+    pushHistory();
+    canvas = {w:preset.w, h:preset.h, foldY: preset.h};
+  }
   applyCanvasSize();
   render();
 });
 
 document.getElementById('newBtn').addEventListener('click', ()=>{
   if(shapes.length && !confirm('現在の内容は削除されます。新規作成しますか？')) return;
+  if(shapes.length){ pushHistory(); }
   shapes = [];
   selectedId = null;
   filename = 'untitled';
   filenameInput.value = filename;
   render();
 });
+
+document.getElementById('undoBtn').addEventListener('click', undo);
+document.getElementById('redoBtn').addEventListener('click', redo);
 
 /* ================= Filename rename ================= */
 renameBtn.addEventListener('click', ()=>{
@@ -1821,7 +2037,7 @@ function commitFilename(){
 function rasterizeToCanvas(){
   return new Promise((resolve,reject)=>{
     const clone = artboard.cloneNode(true);
-    clone.querySelectorAll('.handle,.sel-box,.shape-preview,.fold-guide').forEach(n=>n.remove());
+    clone.querySelectorAll('.selection-overlay,.shape-preview,.fold-guide').forEach(n=>n.remove());
     const temp = clone.querySelector('#tempPenPath'); if(temp) temp.remove();
     clone.setAttribute('width', canvas.w);
     clone.setAttribute('height', canvas.h);
@@ -2051,10 +2267,15 @@ document.getElementById('zipLoadInput').addEventListener('change', async (e)=>{
     canvas = parsed.canvas || canvas;
     if(canvas.foldY === undefined) canvas.foldY = null;
     shapes = parsed.shapes || [];
+    shapes.forEach(s=>{ if(s.rotation === undefined) s.rotation = 0; });
     idCounter = shapes.reduce((m,s)=>Math.max(m,s.id||0), 0);
     selectedId = null;
     filename = file.name.replace(/\.zip$/i,'');
     filenameInput.value = filename;
+    // Loading a project is like opening a fresh document: it shouldn't be
+    // possible to "undo" back into whatever was open before it.
+    undoStack = [];
+    redoStack = [];
     applyCanvasSize();
     render();
   }catch(err){
@@ -2063,10 +2284,65 @@ document.getElementById('zipLoadInput').addEventListener('change', async (e)=>{
   e.target.value = '';
 });
 
-/* ================= Keyboard delete ================= */
+/* ---- Code export: a standalone, self-contained index.html ---- */
+function buildExportedHtml(){
+  const clone = artboard.cloneNode(true);
+  clone.querySelectorAll('.selection-overlay,.shape-preview,.fold-guide').forEach(n=>n.remove());
+  const temp = clone.querySelector('#tempPenPath'); if(temp) temp.remove();
+  clone.removeAttribute('id');
+  clone.setAttribute('width', canvas.w);
+  clone.setAttribute('height', canvas.h);
+  const svgString = new XMLSerializer().serializeToString(clone);
+  const title = (filename || 'untitled').replace(/[<>&]/g, '');
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${title}</title>
+<style>
+  html, body{ margin:0; padding:0; background:#ffffff; }
+  svg{ display:block; width:100%; max-width:${canvas.w}px; height:auto; margin:0 auto; }
+</style>
+</head>
+<body>
+${svgString}
+</body>
+</html>
+`;
+}
+
+document.getElementById('exportCodeBtn').addEventListener('click', ()=>{
+  try{
+    const html = buildExportedHtml();
+    downloadBlob(new Blob([html], {type:'text/html'}), 'index.html');
+  }catch(err){
+    alert('コード出力に失敗しました: ' + err.message);
+  }
+});
+
+/* ================= Keyboard shortcuts ================= */
 window.addEventListener('keydown',(e)=>{
-  if(document.activeElement === filenameInput || document.activeElement === textEditArea || document.activeElement === fontSizeSlider) return;
+  const activeTag = document.activeElement && document.activeElement.tagName;
+  const isEditableFocus = activeTag === 'INPUT' || activeTag === 'TEXTAREA';
+
+  const ctrlOrCmd = e.ctrlKey || e.metaKey;
+
+  // Undo / Redo / Copy / Paste — skipped while a text field has focus so
+  // the browser's own native text-editing shortcuts take priority there.
+  if(ctrlOrCmd && !isEditableFocus){
+    const key = e.key.toLowerCase();
+    if(key === 'z' && e.shiftKey){ e.preventDefault(); redo(); return; }   // Ctrl+Shift+Z
+    if(key === 'z'){ e.preventDefault(); undo(); return; }                  // Ctrl+Z
+    if(key === 'y'){ e.preventDefault(); redo(); return; }                  // Ctrl+Y
+    if(key === 'c'){ e.preventDefault(); copySelected(); return; }          // Ctrl+C
+    if(key === 'v'){ e.preventDefault(); pasteClipboard(); return; }        // Ctrl+V
+  }
+
+  if(isEditableFocus) return; // let normal text editing happen uninterrupted
+
   if((e.key==='Delete' || e.key==='Backspace') && selectedId!==null){
+    pushHistory();
     shapes = shapes.filter(s=>s.id!==selectedId);
     selectedId = null;
     render();
