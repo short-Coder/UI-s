@@ -950,6 +950,15 @@ svg.artboard{
   cursor:grab;
 }
 
+.snap-guide{
+  stroke:var(--danger);
+  stroke-width:1;
+  stroke-dasharray:5 4;
+  opacity:.85;
+  pointer-events:none;
+  vector-effect:non-scaling-stroke;
+}
+
 
 /* ===============================
    Scrollbar
@@ -1596,6 +1605,96 @@ function createTextAt(cx,cy){
   render();
 }
 
+/* ================= Snap guides (Canva-style alignment) ================= */
+const SNAP_THRESHOLD = 6; // svg units; how close before a line "grabs"
+
+/* Collect candidate x-lines to snap to: canvas edges/center, plus every
+   other (non-rotated) shape's left / center / right edges. */
+function getSnapLinesX(excludeId){
+  const lines = [0, canvas.w/2, canvas.w];
+  shapes.forEach(s=>{
+    if(s.id===excludeId || s.rotation) return;
+    const b = getBBox(s);
+    lines.push(b.x, b.x+b.w/2, b.x+b.w);
+  });
+  return lines;
+}
+function getSnapLinesY(excludeId){
+  const lines = [0, canvas.h/2, canvas.h];
+  shapes.forEach(s=>{
+    if(s.id===excludeId || s.rotation) return;
+    const b = getBBox(s);
+    lines.push(b.y, b.y+b.h/2, b.y+b.h);
+  });
+  return lines;
+}
+
+/* Given a shape's candidate (unrotated) bounding box while it's being
+   dragged, find the closest matching guide line (if any) on each axis
+   and return the tiny position correction (dx/dy) plus which guide
+   lines should be drawn. Rotated shapes are skipped (both as sources
+   and as things being snapped) to keep the math simple and honest. */
+function computeMoveSnap(candX, candY, w, h, excludeId, rotation){
+  if(rotation){ return {dx:0, dy:0, guides:[]}; }
+
+  const left = candX, right = candX+w, centerX = candX+w/2;
+  const top = candY, bottom = candY+h, centerY = candY+h/2;
+
+  const xLines = getSnapLinesX(excludeId);
+  const yLines = getSnapLinesY(excludeId);
+
+  let bestDx = 0, bestDxDist = SNAP_THRESHOLD, guideX = null;
+  [left, centerX, right].forEach(val=>{
+    xLines.forEach(t=>{
+      const dist = Math.abs(val - t);
+      if(dist < bestDxDist){ bestDxDist = dist; bestDx = t - val; guideX = t; }
+    });
+  });
+
+  let bestDy = 0, bestDyDist = SNAP_THRESHOLD, guideY = null;
+  [top, centerY, bottom].forEach(val=>{
+    yLines.forEach(t=>{
+      const dist = Math.abs(val - t);
+      if(dist < bestDyDist){ bestDyDist = dist; bestDy = t - val; guideY = t; }
+    });
+  });
+
+  const guides = [];
+  if(guideX !== null) guides.push({type:'v', pos:guideX});
+  if(guideY !== null) guides.push({type:'h', pos:guideY});
+
+  return {dx:bestDx, dy:bestDy, guides};
+}
+
+function drawSnapGuides(guides){
+  let group = document.getElementById('snapGuideGroup');
+  if(!group){
+    group = document.createElementNS(SVG_NS,'g');
+    group.id = 'snapGuideGroup';
+    group.style.pointerEvents = 'none';
+    artboard.appendChild(group);
+  } else {
+    artboard.appendChild(group); // keep it on top of the shape being dragged
+  }
+  group.innerHTML = '';
+  guides.forEach(g=>{
+    const line = document.createElementNS(SVG_NS,'line');
+    if(g.type==='v'){
+      line.setAttribute('x1', g.pos); line.setAttribute('y1', 0);
+      line.setAttribute('x2', g.pos); line.setAttribute('y2', canvas.h);
+    } else {
+      line.setAttribute('x1', 0); line.setAttribute('y1', g.pos);
+      line.setAttribute('x2', canvas.w); line.setAttribute('y2', g.pos);
+    }
+    line.classList.add('snap-guide');
+    group.appendChild(line);
+  });
+}
+function clearSnapGuides(){
+  const group = document.getElementById('snapGuideGroup');
+  if(group) group.remove();
+}
+
 /* ================= Move / resize / vertex-drag ================= */
 let dragState = null;
 
@@ -1695,7 +1794,7 @@ function onShapePointerDown(e, shape){
   selectedId = shape.id;
   render();
   const start = svgPoint(e);
-  dragState = { mode:'move', shape, startX:start.x, startY:start.y, orig: JSON.parse(JSON.stringify(shape)), historySaved:false };
+  dragState = { mode:'move', shape, startX:start.x, startY:start.y, orig: JSON.parse(JSON.stringify(shape)), origBox: getBBox(shape), historySaved:false };
   window.addEventListener('pointermove', onWindowPointerMove);
   window.addEventListener('pointerup', onWindowPointerUp);
 }
@@ -1747,9 +1846,26 @@ function onWindowPointerMove(e){
   const shape = dragState.shape;
 
   if(dragState.mode==='move'){
-    const dx = p.x - dragState.startX;
-    const dy = p.y - dragState.startY;
+    let dx = p.x - dragState.startX;
+    let dy = p.y - dragState.startY;
     const orig = dragState.orig;
+    const origBox = dragState.origBox;
+
+    // Snap the candidate position to nearby center-lines / edges (of the
+    // canvas or of other shapes), Canva-style, unless the shift key is
+    // held (holding shift temporarily disables snapping for fine control).
+    if(!e.shiftKey){
+      const candX = origBox.x + dx;
+      const candY = origBox.y + dy;
+      const snap = computeMoveSnap(candX, candY, origBox.w, origBox.h, shape.id, shape.rotation);
+      dx += snap.dx;
+      dy += snap.dy;
+      if(snap.guides.length){ drawSnapGuides(snap.guides); }
+      else { clearSnapGuides(); }
+    } else {
+      clearSnapGuides();
+    }
+
     if(shape.points){
       shape.points = orig.points.map(pt=>({x:pt.x+dx, y:pt.y+dy}));
     } else {
@@ -1804,6 +1920,7 @@ function onWindowPointerUp(){
   window.removeEventListener('pointermove', onWindowPointerMove);
   window.removeEventListener('pointerup', onWindowPointerUp);
   dragState = null;
+  clearSnapGuides();
   render();
 }
 
