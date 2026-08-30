@@ -1605,13 +1605,14 @@ function createTextAt(cx,cy){
   render();
 }
 
-/* ================= Snap guides (Canva-style alignment) ================= */
-const SNAP_THRESHOLD = 6; // svg units; how close before a line "grabs"
+/* ================= Snap guides (Canva-style alignment & spacing) ================= */
+const SNAP_THRESHOLD = 6;    // svg units; how close an edge/center must be to "grab" an alignment line
+const SPACING_THRESHOLD = 6; // svg units; how close a gap must be to match another gap
 
-/* Collect candidate x-lines to snap to: canvas edges/center, plus every
-   other (non-rotated) shape's left / center / right edges. */
+/* Collect candidate x-lines to snap to: canvas edges/center/quarters,
+   plus every other (non-rotated) shape's left / center / right edges. */
 function getSnapLinesX(excludeId){
-  const lines = [0, canvas.w/2, canvas.w];
+  const lines = [0, canvas.w/4, canvas.w/2, canvas.w*3/4, canvas.w];
   shapes.forEach(s=>{
     if(s.id===excludeId || s.rotation) return;
     const b = getBBox(s);
@@ -1620,7 +1621,7 @@ function getSnapLinesX(excludeId){
   return lines;
 }
 function getSnapLinesY(excludeId){
-  const lines = [0, canvas.h/2, canvas.h];
+  const lines = [0, canvas.h/4, canvas.h/2, canvas.h*3/4, canvas.h];
   shapes.forEach(s=>{
     if(s.id===excludeId || s.rotation) return;
     const b = getBBox(s);
@@ -1629,11 +1630,110 @@ function getSnapLinesY(excludeId){
   return lines;
 }
 
+function overlapCenter(aMin,aMax,bMin,bMax){
+  const lo = Math.max(aMin,bMin), hi = Math.min(aMax,bMax);
+  return hi>lo ? (lo+hi)/2 : (aMin+aMax)/2;
+}
+
+/* Generic 1D "distribution" snap for one axis. `boxes` are the other
+   shapes projected onto this axis as {min,max,orig} — already filtered
+   to only those that overlap the dragged shape on the *other* axis
+   (its "row" for x-axis spacing, its "column" for y-axis spacing).
+   Finds the nearest stationary neighbor immediately before and after
+   the dragged shape and proposes a tiny correction so that either:
+     (a) the shape becomes exactly centered between them, or
+     (b) the gap on one side matches the next gap already established
+         further along that row/column (repeating rhythm) —
+   mirroring Canva/Figma's equal-spacing guides. */
+function computeSpacingAxis(candMin, candMax, boxes){
+  if(boxes.length===0) return null;
+  const sorted = boxes.slice().sort((a,b)=>a.min-b.min);
+
+  let prev=null, next=null;
+  sorted.forEach(b=>{
+    if(b.max <= candMin+0.5){ if(!prev || b.max>prev.max) prev=b; }
+    if(b.min >= candMax-0.5){ if(!next || b.min<next.min) next=b; }
+  });
+
+  let best=null;
+  function consider(delta,dist,meta){
+    if(dist<=SPACING_THRESHOLD && (best===null || dist<best.dist)) best={delta,dist,meta};
+  }
+
+  // (a) equal gap on both sides — center the shape between its neighbors
+  if(prev && next){
+    const gapPrev = candMin-prev.max, gapNext = next.min-candMax;
+    if(gapPrev>-1 && gapNext>-1){
+      const diff = gapNext-gapPrev;
+      consider(diff/2, Math.abs(diff)/2, {kind:'center', prev, next});
+    }
+  }
+  // (b) match the gap already established just before `prev`
+  if(prev){
+    const prevPrev = sorted.filter(b=>b.max<=prev.min+0.5).reduce((m,b)=>(!m||b.max>m.max)?b:m,null);
+    if(prevPrev){
+      const established = prev.min-prevPrev.max;
+      const current = candMin-prev.max;
+      consider(established-current, Math.abs(established-current), {kind:'chainPrev', prevPrev, prev});
+    }
+  }
+  // (b) match the gap already established just after `next`
+  if(next){
+    const nextNext = sorted.filter(b=>b.min>=next.max-0.5).reduce((m,b)=>(!m||b.min<m.min)?b:m,null);
+    if(nextNext){
+      const established = nextNext.min-next.max;
+      const current = next.min-candMax;
+      consider(current-established, Math.abs(current-established), {kind:'chainNext', next, nextNext});
+    }
+  }
+  return best;
+}
+
+/* Turns a spacing match (from computeSpacingAxis) into drawable gap
+   guides once the final, snapped position is known. Each case draws
+   two segments so the equal distances are visually obvious. */
+function buildSpacingGuidesX(meta, finalLeft, finalRight, candY, h){
+  const guides = [];
+  if(meta.kind==='center'){
+    const {prev,next} = meta;
+    guides.push({type:'gapH', x1:prev.max, x2:finalLeft, y:overlapCenter(candY,candY+h,prev.orig.y,prev.orig.y+prev.orig.h)});
+    guides.push({type:'gapH', x1:finalRight, x2:next.min, y:overlapCenter(candY,candY+h,next.orig.y,next.orig.y+next.orig.h)});
+  } else if(meta.kind==='chainPrev'){
+    const {prevPrev,prev} = meta;
+    guides.push({type:'gapH', x1:prevPrev.max, x2:prev.min, y:overlapCenter(prev.orig.y,prev.orig.y+prev.orig.h,prevPrev.orig.y,prevPrev.orig.y+prevPrev.orig.h)});
+    guides.push({type:'gapH', x1:prev.max, x2:finalLeft, y:overlapCenter(candY,candY+h,prev.orig.y,prev.orig.y+prev.orig.h)});
+  } else if(meta.kind==='chainNext'){
+    const {next,nextNext} = meta;
+    guides.push({type:'gapH', x1:next.max, x2:nextNext.min, y:overlapCenter(next.orig.y,next.orig.y+next.orig.h,nextNext.orig.y,nextNext.orig.y+nextNext.orig.h)});
+    guides.push({type:'gapH', x1:finalRight, x2:next.min, y:overlapCenter(candY,candY+h,next.orig.y,next.orig.y+next.orig.h)});
+  }
+  return guides;
+}
+function buildSpacingGuidesY(meta, finalTop, finalBottom, candX, w){
+  const guides = [];
+  if(meta.kind==='center'){
+    const {prev,next} = meta;
+    guides.push({type:'gapV', y1:prev.max, y2:finalTop, x:overlapCenter(candX,candX+w,prev.orig.x,prev.orig.x+prev.orig.w)});
+    guides.push({type:'gapV', y1:finalBottom, y2:next.min, x:overlapCenter(candX,candX+w,next.orig.x,next.orig.x+next.orig.w)});
+  } else if(meta.kind==='chainPrev'){
+    const {prevPrev,prev} = meta;
+    guides.push({type:'gapV', y1:prevPrev.max, y2:prev.min, x:overlapCenter(prev.orig.x,prev.orig.x+prev.orig.w,prevPrev.orig.x,prevPrev.orig.x+prevPrev.orig.w)});
+    guides.push({type:'gapV', y1:prev.max, y2:finalTop, x:overlapCenter(candX,candX+w,prev.orig.x,prev.orig.x+prev.orig.w)});
+  } else if(meta.kind==='chainNext'){
+    const {next,nextNext} = meta;
+    guides.push({type:'gapV', y1:next.max, y2:nextNext.min, x:overlapCenter(next.orig.x,next.orig.x+next.orig.w,nextNext.orig.x,nextNext.orig.x+nextNext.orig.w)});
+    guides.push({type:'gapV', y1:finalBottom, y2:next.min, x:overlapCenter(candX,candX+w,next.orig.x,next.orig.x+next.orig.w)});
+  }
+  return guides;
+}
+
 /* Given a shape's candidate (unrotated) bounding box while it's being
-   dragged, find the closest matching guide line (if any) on each axis
-   and return the tiny position correction (dx/dy) plus which guide
-   lines should be drawn. Rotated shapes are skipped (both as sources
-   and as things being snapped) to keep the math simple and honest. */
+   dragged, find the closest matching guide on each axis — either an
+   alignment line (edge/center against the canvas or another shape) or
+   an equal-spacing match against neighboring shapes — and return the
+   tiny position correction (dx/dy) plus which guide(s) to draw.
+   Rotated shapes are skipped (both as sources and as things being
+   snapped) to keep the math simple and honest. */
 function computeMoveSnap(candX, candY, w, h, excludeId, rotation){
   if(rotation){ return {dx:0, dy:0, guides:[]}; }
 
@@ -1643,27 +1743,46 @@ function computeMoveSnap(candX, candY, w, h, excludeId, rotation){
   const xLines = getSnapLinesX(excludeId);
   const yLines = getSnapLinesY(excludeId);
 
-  let bestDx = 0, bestDxDist = SNAP_THRESHOLD, guideX = null;
+  let bestDx = 0, bestDxDist = SNAP_THRESHOLD, guideXList = [];
   [left, centerX, right].forEach(val=>{
     xLines.forEach(t=>{
       const dist = Math.abs(val - t);
-      if(dist < bestDxDist){ bestDxDist = dist; bestDx = t - val; guideX = t; }
+      if(dist < bestDxDist){ bestDxDist = dist; bestDx = t - val; guideXList = [{type:'v', pos:t}]; }
     });
   });
 
-  let bestDy = 0, bestDyDist = SNAP_THRESHOLD, guideY = null;
+  let bestDy = 0, bestDyDist = SNAP_THRESHOLD, guideYList = [];
   [top, centerY, bottom].forEach(val=>{
     yLines.forEach(t=>{
       const dist = Math.abs(val - t);
-      if(dist < bestDyDist){ bestDyDist = dist; bestDy = t - val; guideY = t; }
+      if(dist < bestDyDist){ bestDyDist = dist; bestDy = t - val; guideYList = [{type:'h', pos:t}]; }
     });
   });
 
-  const guides = [];
-  if(guideX !== null) guides.push({type:'v', pos:guideX});
-  if(guideY !== null) guides.push({type:'h', pos:guideY});
+  // ---- Equal-spacing / distribution snapping ----
+  const otherBoxes = shapes.filter(s=>s.id!==excludeId && !s.rotation).map(s=>getBBox(s));
 
-  return {dx:bestDx, dy:bestDy, guides};
+  const rowBoxes = otherBoxes
+    .filter(b => Math.min(bottom, b.y+b.h) - Math.max(top, b.y) > 0) // shares a "row" with the dragged shape
+    .map(b=>({min:b.x, max:b.x+b.w, orig:b}));
+  const spacingX = computeSpacingAxis(left, right, rowBoxes);
+  if(spacingX && spacingX.dist < bestDxDist){
+    bestDxDist = spacingX.dist;
+    bestDx = spacingX.delta;
+    guideXList = buildSpacingGuidesX(spacingX.meta, left+spacingX.delta, right+spacingX.delta, top, h);
+  }
+
+  const colBoxes = otherBoxes
+    .filter(b => Math.min(right, b.x+b.w) - Math.max(left, b.x) > 0) // shares a "column" with the dragged shape
+    .map(b=>({min:b.y, max:b.y+b.h, orig:b}));
+  const spacingY = computeSpacingAxis(top, bottom, colBoxes);
+  if(spacingY && spacingY.dist < bestDyDist){
+    bestDyDist = spacingY.dist;
+    bestDy = spacingY.delta;
+    guideYList = buildSpacingGuidesY(spacingY.meta, top+spacingY.delta, bottom+spacingY.delta, left, w);
+  }
+
+  return {dx:bestDx, dy:bestDy, guides:[...guideXList, ...guideYList]};
 }
 
 function drawSnapGuides(guides){
@@ -1677,17 +1796,49 @@ function drawSnapGuides(guides){
     artboard.appendChild(group); // keep it on top of the shape being dragged
   }
   group.innerHTML = '';
+  const TICK = 5; // half-length of the small perpendicular end-caps on spacing guides
   guides.forEach(g=>{
-    const line = document.createElementNS(SVG_NS,'line');
     if(g.type==='v'){
+      const line = document.createElementNS(SVG_NS,'line');
       line.setAttribute('x1', g.pos); line.setAttribute('y1', 0);
       line.setAttribute('x2', g.pos); line.setAttribute('y2', canvas.h);
-    } else {
+      line.classList.add('snap-guide');
+      group.appendChild(line);
+    } else if(g.type==='h'){
+      const line = document.createElementNS(SVG_NS,'line');
       line.setAttribute('x1', 0); line.setAttribute('y1', g.pos);
       line.setAttribute('x2', canvas.w); line.setAttribute('y2', g.pos);
+      line.classList.add('snap-guide');
+      group.appendChild(line);
+    } else if(g.type==='gapH'){
+      const x1 = Math.min(g.x1,g.x2), x2 = Math.max(g.x1,g.x2);
+      const line = document.createElementNS(SVG_NS,'line');
+      line.setAttribute('x1', x1); line.setAttribute('y1', g.y);
+      line.setAttribute('x2', x2); line.setAttribute('y2', g.y);
+      line.classList.add('snap-guide');
+      group.appendChild(line);
+      [x1,x2].forEach(x=>{
+        const tick = document.createElementNS(SVG_NS,'line');
+        tick.setAttribute('x1', x); tick.setAttribute('y1', g.y-TICK);
+        tick.setAttribute('x2', x); tick.setAttribute('y2', g.y+TICK);
+        tick.classList.add('snap-guide');
+        group.appendChild(tick);
+      });
+    } else if(g.type==='gapV'){
+      const y1 = Math.min(g.y1,g.y2), y2 = Math.max(g.y1,g.y2);
+      const line = document.createElementNS(SVG_NS,'line');
+      line.setAttribute('x1', g.x); line.setAttribute('y1', y1);
+      line.setAttribute('x2', g.x); line.setAttribute('y2', y2);
+      line.classList.add('snap-guide');
+      group.appendChild(line);
+      [y1,y2].forEach(y=>{
+        const tick = document.createElementNS(SVG_NS,'line');
+        tick.setAttribute('x1', g.x-TICK); tick.setAttribute('y1', y);
+        tick.setAttribute('x2', g.x+TICK); tick.setAttribute('y2', y);
+        tick.classList.add('snap-guide');
+        group.appendChild(tick);
+      });
     }
-    line.classList.add('snap-guide');
-    group.appendChild(line);
   });
 }
 function clearSnapGuides(){
