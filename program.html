@@ -5,7 +5,17 @@
 <title>UI's Editor</title>
 <style>
 
+/* ===============================
+   けいふぉんと
+   =============================== */
 
+@font-face {
+  font-family: "Keifont.ttf";
+  src: url("./Keifont.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
 
 
 /* ===============================
@@ -305,6 +315,21 @@ textarea{
   color:var(--ink);
 
   background:transparent;
+}
+
+
+/* Auto-save status */
+
+.save-status{
+  font-family:var(--ui-font);
+
+  font-size:11px;
+
+  font-weight:600;
+
+  color:var(--ink-soft);
+
+  white-space:nowrap;
 }
 
 
@@ -1008,6 +1033,7 @@ svg.artboard{
     </div>
 
     <div class="filename-box">
+      <span class="save-status" id="saveStatus"></span>
       <input type="text" id="filenameInput" value="untitled" disabled>
       <button class="icon-btn" id="renameBtn" title="名前を変更" type="button">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 21l3.6-.9L20 6.7a1 1 0 0 0 0-1.4l-2.3-2.3a1 1 0 0 0-1.4 0L2.9 16.4 2 21z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
@@ -1425,6 +1451,7 @@ function render(){
 
   updateRightPanel();
   updateToolUI();
+  scheduleAutosave();
 }
 
 function updateToolUI(){
@@ -2285,6 +2312,7 @@ function commitFilename(){
   filename = filenameInput.value.trim() || 'untitled';
   filenameInput.value = filename;
   filenameInput.disabled = true;
+  scheduleAutosave();
 }
 
 /* =====================================================================
@@ -2654,9 +2682,117 @@ window.addEventListener('keydown',(e)=>{
   }
 });
 
+/* =====================================================================
+   Auto-save (IndexedDB)
+   Every change (render) schedules a debounced save of the whole project
+   (canvas, shapes, filename, device preset). On startup the last saved
+   project is restored. Nothing is written until the restore attempt has
+   finished, so an empty fresh editor can never overwrite saved work.
+   ===================================================================== */
+const AUTOSAVE_DB_NAME = 'uis-editor';
+const AUTOSAVE_STORE = 'projects';
+const AUTOSAVE_KEY = 'autosave';
+const AUTOSAVE_DELAY = 500; // ms of quiet before writing
+
+const saveStatusEl = document.getElementById('saveStatus');
+const deviceSelectEl = document.getElementById('deviceSelect');
+let autosaveReady = false;
+let autosaveTimer = null;
+let autosaveDbPromise = null;
+
+function setSaveStatus(text){ saveStatusEl.textContent = text; }
+
+function openAutosaveDb(){
+  if(autosaveDbPromise) return autosaveDbPromise;
+  autosaveDbPromise = new Promise((resolve,reject)=>{
+    if(!window.indexedDB){ reject(new Error('IndexedDB非対応')); return; }
+    const req = indexedDB.open(AUTOSAVE_DB_NAME, 1);
+    req.onupgradeneeded = ()=>{ req.result.createObjectStore(AUTOSAVE_STORE); };
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+    req.onblocked = ()=>reject(new Error('DBがブロックされました'));
+  });
+  return autosaveDbPromise;
+}
+async function idbGet(key){
+  const db = await openAutosaveDb();
+  return new Promise((resolve,reject)=>{
+    const req = db.transaction(AUTOSAVE_STORE,'readonly').objectStore(AUTOSAVE_STORE).get(key);
+    req.onsuccess = ()=>resolve(req.result);
+    req.onerror = ()=>reject(req.error);
+  });
+}
+async function idbPut(key, value){
+  const db = await openAutosaveDb();
+  return new Promise((resolve,reject)=>{
+    const tx = db.transaction(AUTOSAVE_STORE,'readwrite');
+    tx.objectStore(AUTOSAVE_STORE).put(value, key);
+    tx.oncomplete = ()=>resolve();
+    tx.onerror = ()=>reject(tx.error);
+    tx.onabort = ()=>reject(tx.error);
+  });
+}
+
+function scheduleAutosave(){
+  if(!autosaveReady) return;
+  setSaveStatus('保存中…');
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(saveNow, AUTOSAVE_DELAY);
+}
+async function saveNow(){
+  clearTimeout(autosaveTimer);
+  autosaveTimer = null;
+  if(!autosaveReady) return;
+  try{
+    const payload = JSON.parse(JSON.stringify({
+      canvas, shapes, filename,
+      device: deviceSelectEl.value,
+      savedAt: Date.now()
+    }));
+    await idbPut(AUTOSAVE_KEY, payload);
+    setSaveStatus('自動保存済み');
+  }catch(err){
+    setSaveStatus('自動保存に失敗');
+  }
+}
+
+async function restoreAutosave(){
+  try{
+    const data = await idbGet(AUTOSAVE_KEY);
+    if(data && Array.isArray(data.shapes)){
+      canvas = data.canvas || canvas;
+      if(canvas.foldY === undefined) canvas.foldY = null;
+      shapes = data.shapes;
+      shapes.forEach(s=>{ if(s.rotation === undefined) s.rotation = 0; });
+      idCounter = shapes.reduce((m,s)=>Math.max(m,s.id||0), 0);
+      filename = data.filename || 'untitled';
+      filenameInput.value = filename;
+      if(data.device && Object.prototype.hasOwnProperty.call(DEVICE_PRESETS, data.device)){
+        deviceSelectEl.value = data.device;
+      }
+      selectedId = null;
+      undoStack = []; redoStack = [];
+      applyCanvasSize();
+      setSaveStatus('前回の内容を復元しました');
+    }
+    autosaveReady = true;
+  }catch(err){
+    autosaveReady = false;
+    setSaveStatus('自動保存は利用できません');
+  }
+  render();
+}
+
+// Flush any pending write as soon as the tab is hidden / closed.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'hidden' && autosaveTimer !== null) saveNow();
+});
+window.addEventListener('pagehide', ()=>{ if(autosaveTimer !== null) saveNow(); });
+
 /* ================= Init ================= */
 applyCanvasSize();
 render();
+restoreAutosave();
 </script>
 </body>
 </html>
